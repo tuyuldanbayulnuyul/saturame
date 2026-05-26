@@ -118,28 +118,6 @@
     "mt103": "",
     "rtgs": ""
   },
-  "TIMING": {
-    "boot_progress": 8,
-    "auth_connect": 1.5,
-    "auth_verify": 1.5,
-    "auth_2fa": 1.2,
-    "auth_session_key": 3,
-    "net_hop_duration": 1.0,
-    "net_ecdhe": 1.5,
-    "net_forward_secrecy": 1.0,
-    "net_alliance": 1.2,
-    "net_tunnel_progress": 4,
-    "scan_probe_duration": 4,
-    "scan_batch_duration": 80,
-    "decrypt_layer_duration": 4,
-    "routing_validate": 2.0,
-    "routing_aml": 1.5,
-    "routing_correspondent": 6,
-    "bridge_ping": 1.5,
-    "bridge_escrow_progress": 2.5,
-    "bridge_sync_progress": 5,
-    "settlement_duration": 30
-  },
   "BIN_DATABASE": {
     "4": "VISA",
     "40": "VISA CLASSIC",

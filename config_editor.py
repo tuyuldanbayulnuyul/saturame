@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GPSE Configuration Editor v1.0
-Terminal-based interactive settings editor for config.json
+GPSE Configuration Editor v2.0
+Web-based settings editor for config.json
+Runs on http://localhost:8585
+LOADING_DURATION controls all internal timing distribution per module.
 """
 
 import os
 import sys
 import json
-import copy
-
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 # =====================================================================
 # [ CONFIGURATION PATH ]
@@ -19,81 +21,7 @@ try:
 except NameError:
     CONFIG_PATH = os.path.join(os.getcwd(), "config.json")
 
-
-# =====================================================================
-# [ TERMINAL STYLING - ANSI CODES ]
-# =====================================================================
-class S:
-    """ANSI escape codes for terminal styling."""
-    H = '\033[95m'; C = '\033[96m'; B = '\033[94m'
-    G = '\033[92m'; Y = '\033[93m'; R = '\033[91m'
-    W = '\033[97m'; BD = '\033[1m'; DM = '\033[2m'
-    UL = '\033[4m'; RST = '\033[0m'; BL = '\033[5m'
-    ORANGE = '\033[38;5;208m'
-    PURPLE = '\033[38;5;141m'
-    TEAL = '\033[38;5;43m'
-    GOLD = '\033[38;5;220m'
-
-    @staticmethod
-    def init():
-        if os.name == 'nt':
-            os.system('')
-
-
-# =====================================================================
-# [ UTILITY FUNCTIONS ]
-# =====================================================================
-def clear():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-
-def header(title, subtitle=None, width=66, color=S.C):
-    """Print formatted header box."""
-    border = "\u2550" * width
-    print(f"\n{color}{S.BD}\u2554{border}\u2557{S.RST}")
-    pad = (width - len(title)) // 2
-    print(f"{color}{S.BD}\u2551{' ' * pad}{S.W}{S.BD}{title}{color}{' ' * (width - pad - len(title))}\u2551{S.RST}")
-    if subtitle:
-        pad2 = (width - len(subtitle)) // 2
-        print(f"{color}{S.BD}\u2551{' ' * pad2}{S.DM}{subtitle}{color}{S.BD}{' ' * (width - pad2 - len(subtitle))}\u2551{S.RST}")
-    print(f"{color}{S.BD}\u255a{border}\u255d{S.RST}")
-
-
-def sep(width=66, char="\u2500", color=S.DM):
-    """Print separator line."""
-    print(f"  {color}{char * width}{S.RST}")
-
-
-def prompt(text, color=S.Y):
-    """Display prompt and get input."""
-    return input(f"\n  {color}\u25b8 {text}: {S.RST}").strip()
-
-
-def info(text, prefix="INFO", color=S.C):
-    """Display info message."""
-    print(f"  {color}[{prefix}]{S.RST} {text}")
-
-
-def success(text):
-    """Display success message."""
-    print(f"  {S.G}[\u2713]{S.RST} {text}")
-
-
-def error(text):
-    """Display error message."""
-    print(f"  {S.R}[\u2717]{S.RST} {text}")
-
-
-def wait():
-    """Wait for user to press Enter."""
-    input(f"\n  {S.DM}Press ENTER to continue...{S.RST}")
-
-
-def confirm(text):
-    """Ask for yes/no confirmation."""
-    resp = input(f"\n  {S.Y}\u25b8 {text} (y/n): {S.RST}").strip().lower()
-    return resp in ('y', 'yes')
-
+PORT = 8585
 
 # =====================================================================
 # [ CONFIG LOAD / SAVE ]
@@ -101,656 +29,658 @@ def confirm(text):
 def load_config():
     """Load configuration from config.json."""
     if not os.path.exists(CONFIG_PATH):
-        error(f"config.json not found at: {CONFIG_PATH}")
-        error("Please run engine.py first to generate the default config.")
+        print(f"[ERROR] config.json not found at: {CONFIG_PATH}")
         sys.exit(1)
-
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
     except json.JSONDecodeError as e:
-        error(f"Invalid JSON in config.json: {e}")
+        print(f"[ERROR] Invalid JSON in config.json: {e}")
         sys.exit(1)
     except IOError as e:
-        error(f"Cannot read config.json: {e}")
+        print(f"[ERROR] Cannot read config.json: {e}")
         sys.exit(1)
-
     return config
 
 
 def save_config(config):
-    """Save configuration to config.json with validation."""
-    # Validate JSON serialization first
+    """Save configuration to config.json with proper formatting and permissions."""
     try:
         json_str = json.dumps(config, indent=2, ensure_ascii=False)
     except (TypeError, ValueError) as e:
-        error(f"Configuration contains invalid data: {e}")
-        return False
-
+        return False, str(e)
     try:
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             f.write(json_str)
         os.chmod(CONFIG_PATH, 0o600)
-        return True
+        return True, ""
     except IOError as e:
-        error(f"Cannot write config.json: {e}")
-        return False
+        return False, str(e)
 
 
 # =====================================================================
-# [ MODULE TOKENS EDITOR ]
+# [ HTML PAGE - EMBEDDED ]
 # =====================================================================
-MODULE_NAMES = {
-    "protocol_transaction": "Protocol Transaction",
-    "interbank": "Interbank Transfer",
-    "ip_to_ip": "IP-to-IP Transfer",
-    "s2s": "Server-to-Server (S2S)",
-    "gpi": "SWIFT GPI",
-    "mt103": "MT103 Transfer",
-    "rtgs": "RTGS Settlement",
+HTML_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPSE Configuration Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0a;
+    color: #c8c8c8;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    min-height: 100vh;
+}
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+}
+.header {
+    text-align: center;
+    padding: 20px 0;
+    border-bottom: 1px solid #1a3a4a;
+    margin-bottom: 20px;
+}
+.header h1 {
+    color: #00e5ff;
+    font-size: 22px;
+    letter-spacing: 2px;
+}
+.header p {
+    color: #607070;
+    font-size: 12px;
+    margin-top: 6px;
+}
+.tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #1a3a4a;
+    padding-bottom: 10px;
+}
+.tab-btn {
+    background: #111;
+    color: #888;
+    border: 1px solid #222;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    border-radius: 4px 4px 0 0;
+    transition: all 0.2s;
+}
+.tab-btn:hover { color: #00e5ff; border-color: #00e5ff; }
+.tab-btn.active {
+    background: #0d2a35;
+    color: #00e5ff;
+    border-color: #00e5ff;
+    border-bottom-color: #0d2a35;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.section-title {
+    color: #00e5ff;
+    font-size: 16px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1a3a4a;
+}
+.module-group {
+    background: #111;
+    border: 1px solid #1a2a2a;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 12px;
+}
+.module-group h3 {
+    color: #4de8b0;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+.token-list {
+    margin-left: 10px;
+}
+.token-item {
+    background: #0a0a0a;
+    border: 1px solid #1a2a2a;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 8px;
+}
+.token-item .token-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.token-item .token-id {
+    color: #ffd740;
+    font-weight: bold;
+    font-size: 13px;
+}
+.token-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 8px;
+}
+.field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.field-row label {
+    color: #607070;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+.field-row input, .field-row select, .field-row textarea {
+    background: #0d1a1a;
+    border: 1px solid #1a3a4a;
+    color: #c8c8c8;
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+}
+.field-row input:focus, .field-row select:focus, .field-row textarea:focus {
+    outline: none;
+    border-color: #00e5ff;
+}
+.btn {
+    background: #0d2a35;
+    color: #00e5ff;
+    border: 1px solid #00e5ff;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+.btn:hover {
+    background: #00e5ff;
+    color: #0a0a0a;
+}
+.btn-danger {
+    border-color: #ff4444;
+    color: #ff4444;
+}
+.btn-danger:hover {
+    background: #ff4444;
+    color: #0a0a0a;
+}
+.btn-success {
+    border-color: #4de8b0;
+    color: #4de8b0;
+}
+.btn-success:hover {
+    background: #4de8b0;
+    color: #0a0a0a;
+}
+.save-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #111;
+    border-top: 1px solid #1a3a4a;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    z-index: 1000;
+}
+.save-bar .btn {
+    padding: 10px 30px;
+    font-size: 14px;
+}
+.status-msg {
+    color: #4de8b0;
+    font-size: 12px;
+    min-height: 18px;
+}
+.status-msg.error { color: #ff4444; }
+.message-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.message-item input {
+    flex: 1;
+    background: #0d1a1a;
+    border: 1px solid #1a3a4a;
+    color: #c8c8c8;
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+}
+.message-item input:focus { outline: none; border-color: #00e5ff; }
+.bin-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.bin-row input {
+    background: #0d1a1a;
+    border: 1px solid #1a3a4a;
+    color: #c8c8c8;
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+}
+.bin-row input:first-child { width: 80px; }
+.bin-row input:nth-child(2) { flex: 1; }
+.padding-bottom { padding-bottom: 70px; }
+select {
+    background: #0d1a1a;
+    border: 1px solid #1a3a4a;
+    color: #c8c8c8;
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+}
+textarea {
+    resize: vertical;
+    min-height: 50px;
+}
+</style>
+</head>
+<body>
+<div class="container padding-bottom">
+<div class="header">
+    <h1>[ GPSE CONFIGURATION EDITOR ]</h1>
+    <p>Web-based settings manager v2.0 | http://localhost:8585</p>
+</div>
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('tokens')">Module Tokens</button>
+    <button class="tab-btn" onclick="switchTab('results')">Result Configuration</button>
+    <button class="tab-btn" onclick="switchTab('duration')">Loading Duration</button>
+    <button class="tab-btn" onclick="switchTab('messages')">Loading Messages</button>
+    <button class="tab-btn" onclick="switchTab('bin')">BIN Database</button>
+</div>
+<div id="tab-tokens" class="tab-content active"></div>
+<div id="tab-results" class="tab-content"></div>
+<div id="tab-duration" class="tab-content"></div>
+<div id="tab-messages" class="tab-content"></div>
+<div id="tab-bin" class="tab-content"></div>
+</div>
+<div class="save-bar">
+    <span class="status-msg" id="statusMsg"></span>
+    <button class="btn btn-success" onclick="saveConfig()">SAVE CONFIGURATION</button>
+</div>
+<script>
+let config = {};
+const MODULES = ['protocol_transaction','interbank','ip_to_ip','s2s','gpi','mt103','rtgs'];
+const MODULE_LABELS = {
+    protocol_transaction: 'Protocol Transaction',
+    interbank: 'Interbank Transfer',
+    ip_to_ip: 'IP-to-IP Transfer',
+    s2s: 'Server-to-Server (S2S)',
+    gpi: 'SWIFT GPI',
+    mt103: 'MT103 Transfer',
+    rtgs: 'RTGS Settlement'
+};
+const TOKEN_TEMPLATES = {
+    protocol_transaction: {name:'',cardholder:'',bank_provider:'',iso_country:'',iso_a2:'',iso_a3:'',iso_num:'',allowed_card_last4:''},
+    interbank: {name:'',username:'',password_hash:''},
+    ip_to_ip: {name:'',operator:'',clearance:'',region:''},
+    s2s: {name:'',merchant:'',api_version:'',environment:''},
+    gpi: {name:'',institution:'',bic:'',gpi_member_id:''},
+    mt103: {name:'',institution:'',bic:'',branch:''},
+    rtgs: {name:'',system:'',routing:'',node:''}
+};
+
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
 }
 
-MODULE_KEYS = list(MODULE_NAMES.keys())
-
-
-def edit_module_tokens(config):
-    """Edit module tokens section."""
-    while True:
-        clear()
-        header("MODULE TOKENS EDITOR", "Edit access tokens for all 7 modules", color=S.ORANGE)
-        print()
-
-        tokens = config.get("MODULE_TOKENS", {})
-
-        for i, key in enumerate(MODULE_KEYS, 1):
-            mod_tokens = tokens.get(key, {})
-            count = len(mod_tokens)
-            color = S.ORANGE if i <= 1 else S.C if i <= 2 else S.TEAL if i <= 3 else S.PURPLE if i <= 4 else S.GOLD if i <= 5 else S.B if i <= 6 else S.G
-            print(f"  {color}{S.BD} [{i}]{S.RST}  {S.W}{S.BD}{MODULE_NAMES[key]}{S.RST}")
-            print(f"        {S.DM}{count} token(s) configured{S.RST}\n")
-
-        print(f"  {S.R}{S.BD} [0]{S.RST}  {S.DM}Back to Main Menu{S.RST}")
-        sep()
-
-        choice = prompt("Select module [0-7]")
-
-        if choice == "0":
-            return
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(MODULE_KEYS):
-                edit_module_token_detail(config, MODULE_KEYS[idx])
-        except ValueError:
-            pass
-
-
-def edit_module_token_detail(config, module_key):
-    """Edit tokens for a specific module."""
-    while True:
-        clear()
-        header(f"TOKENS: {MODULE_NAMES[module_key].upper()}", color=S.ORANGE)
-        print()
-
-        tokens = config.get("MODULE_TOKENS", {}).get(module_key, {})
-
-        if not tokens:
-            info("No tokens configured for this module.", prefix="EMPTY")
-        else:
-            print(f"  {S.W}{S.BD}  {'#':<4}{'TOKEN ID':<12}{'NAME':<25}{'FIELDS'}{S.RST}")
-            sep(60)
-            for i, (token_id, data) in enumerate(tokens.items(), 1):
-                name = data.get("name", "N/A")
-                fields = len(data)
-                print(f"  {S.C}  {i:<4}{S.W}{token_id:<12}{name:<25}{S.DM}{fields} fields{S.RST}")
-
-        print()
-        sep()
-        print(f"\n  {S.DM}  [#] Select token number to edit")
-        print(f"  {S.DM}  [A] Add new token")
-        print(f"  {S.DM}  [D] Delete a token")
-        print(f"  {S.DM}  [0] Back{S.RST}")
-
-        choice = prompt("Action").upper()
-
-        if choice == "0":
-            return
-        elif choice == "A":
-            add_token(config, module_key)
-        elif choice == "D":
-            delete_token(config, module_key)
-        else:
-            try:
-                idx = int(choice) - 1
-                token_ids = list(tokens.keys())
-                if 0 <= idx < len(token_ids):
-                    edit_token_fields(config, module_key, token_ids[idx])
-            except ValueError:
-                pass
-
-
-def edit_token_fields(config, module_key, token_id):
-    """Edit individual fields of a token."""
-    while True:
-        clear()
-        header(f"TOKEN: {token_id} ({MODULE_NAMES[module_key]})", color=S.TEAL)
-        print()
-
-        data = config["MODULE_TOKENS"][module_key][token_id]
-
-        print(f"  {S.W}{S.BD}  {'#':<4}{'FIELD':<25}{'VALUE'}{S.RST}")
-        sep(60)
-        fields = list(data.items())
-        for i, (field, value) in enumerate(fields, 1):
-            val_str = str(value) if value is not None else "(null)"
-            print(f"  {S.C}  {i:<4}{S.W}{field:<25}{S.DM}{val_str}{S.RST}")
-
-        print()
-        sep()
-        print(f"\n  {S.DM}  [#] Select field number to edit")
-        print(f"  {S.DM}  [A] Add new field")
-        print(f"  {S.DM}  [R] Remove a field")
-        print(f"  {S.DM}  [0] Back{S.RST}")
-
-        choice = prompt("Action").upper()
-
-        if choice == "0":
-            return
-        elif choice == "A":
-            field_name = prompt("New field name")
-            if field_name:
-                field_value = prompt(f"Value for '{field_name}' (leave empty for null)")
-                if field_value == "":
-                    config["MODULE_TOKENS"][module_key][token_id][field_name] = None
-                else:
-                    config["MODULE_TOKENS"][module_key][token_id][field_name] = field_value
-                success(f"Field '{field_name}' added.")
-                wait()
-        elif choice == "R":
-            field_num = prompt("Field number to remove")
-            try:
-                fidx = int(field_num) - 1
-                if 0 <= fidx < len(fields):
-                    fname = fields[fidx][0]
-                    if confirm(f"Remove field '{fname}'?"):
-                        del config["MODULE_TOKENS"][module_key][token_id][fname]
-                        success(f"Field '{fname}' removed.")
-                    wait()
-            except ValueError:
-                pass
-        else:
-            try:
-                fidx = int(choice) - 1
-                if 0 <= fidx < len(fields):
-                    fname = fields[fidx][0]
-                    fval = fields[fidx][1]
-                    print(f"\n  {S.DM}Current value: {fval}{S.RST}")
-                    new_val = prompt(f"New value for '{fname}' (empty for null)")
-                    if new_val == "":
-                        config["MODULE_TOKENS"][module_key][token_id][fname] = None
-                    else:
-                        config["MODULE_TOKENS"][module_key][token_id][fname] = new_val
-                    success(f"Field '{fname}' updated.")
-                    wait()
-            except ValueError:
-                pass
-
-
-def add_token(config, module_key):
-    """Add a new token to a module."""
-    print()
-    token_id = prompt("New Token ID (e.g. ABC12)")
-    if not token_id:
-        return
-
-    token_id = token_id.upper()
-    if token_id in config["MODULE_TOKENS"].get(module_key, {}):
-        error(f"Token '{token_id}' already exists.")
-        wait()
-        return
-
-    name = prompt("Token name")
-    if not name:
-        return
-
-    if module_key not in config["MODULE_TOKENS"]:
-        config["MODULE_TOKENS"][module_key] = {}
-
-    config["MODULE_TOKENS"][module_key][token_id] = {"name": name.upper()}
-    success(f"Token '{token_id}' created with name '{name.upper()}'.")
-    info("Use the token editor to add more fields.")
-    wait()
-
-
-def delete_token(config, module_key):
-    """Delete a token from a module."""
-    tokens = config["MODULE_TOKENS"].get(module_key, {})
-    if not tokens:
-        error("No tokens to delete.")
-        wait()
-        return
-
-    token_num = prompt("Token number to delete")
-    try:
-        idx = int(token_num) - 1
-        token_ids = list(tokens.keys())
-        if 0 <= idx < len(token_ids):
-            tid = token_ids[idx]
-            if confirm(f"Delete token '{tid}'?"):
-                del config["MODULE_TOKENS"][module_key][tid]
-                success(f"Token '{tid}' deleted.")
-        else:
-            error("Invalid token number.")
-    except ValueError:
-        error("Invalid input.")
-    wait()
-
-
-# =====================================================================
-# [ RESULT CONFIGURATION EDITOR ]
-# =====================================================================
-VALID_STATUSES = ["SUCCESS", "FAILED", "PENDING"]
-
-
-def edit_result_config(config):
-    """Edit result configuration (status per module)."""
-    while True:
-        clear()
-        header("RESULT CONFIGURATION", "Set outcome status per module", color=S.G)
-        print()
-
-        result_cfg = config.get("RESULT_CONFIG", {})
-        result_msg = config.get("RESULT_MESSAGE", {})
-
-        print(f"  {S.W}{S.BD}  {'#':<4}{'MODULE':<28}{'STATUS':<14}{'CUSTOM MESSAGE'}{S.RST}")
-        sep(66)
-
-        for i, key in enumerate(MODULE_KEYS, 1):
-            status = result_cfg.get(key, "SUCCESS")
-            msg = result_msg.get(key, "")
-            status_color = S.G if status == "SUCCESS" else S.R if status == "FAILED" else S.Y
-            print(f"  {S.C}  {i:<4}{S.W}{MODULE_NAMES[key]:<28}{status_color}{S.BD}{status:<14}{S.DM}{msg or '(none)'}{S.RST}")
-
-        print()
-        sep()
-        print(f"\n  {S.DM}  [#] Select module to change status")
-        print(f"  {S.DM}  [M] Edit custom messages")
-        print(f"  {S.DM}  [0] Back{S.RST}")
-
-        choice = prompt("Action").upper()
-
-        if choice == "0":
-            return
-        elif choice == "M":
-            edit_result_messages(config)
-        else:
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(MODULE_KEYS):
-                    key = MODULE_KEYS[idx]
-                    current = result_cfg.get(key, "SUCCESS")
-                    print(f"\n  {S.DM}Current status: {current}{S.RST}")
-                    print(f"  {S.DM}Options: SUCCESS / FAILED / PENDING{S.RST}")
-                    new_status = prompt("New status").upper()
-                    if new_status in VALID_STATUSES:
-                        config["RESULT_CONFIG"][key] = new_status
-                        success(f"{MODULE_NAMES[key]} set to {new_status}.")
-                    else:
-                        error("Invalid status. Must be SUCCESS, FAILED, or PENDING.")
-                    wait()
-            except ValueError:
-                pass
-
-
-def edit_result_messages(config):
-    """Edit custom result messages."""
-    while True:
-        clear()
-        header("RESULT MESSAGES", "Custom messages shown on module completion", color=S.G)
-        print()
-
-        result_msg = config.get("RESULT_MESSAGE", {})
-
-        for i, key in enumerate(MODULE_KEYS, 1):
-            msg = result_msg.get(key, "")
-            print(f"  {S.C}  [{i}]{S.RST} {S.W}{MODULE_NAMES[key]}{S.RST}")
-            print(f"       {S.DM}{msg or '(no custom message)'}{S.RST}\n")
-
-        print(f"  {S.R}  [0]{S.RST} {S.DM}Back{S.RST}")
-        sep()
-
-        choice = prompt("Select module to edit message [0-7]")
-
-        if choice == "0":
-            return
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(MODULE_KEYS):
-                key = MODULE_KEYS[idx]
-                current = result_msg.get(key, "")
-                print(f"\n  {S.DM}Current: {current or '(empty)'}{S.RST}")
-                new_msg = prompt("New message (leave empty to clear)")
-                config["RESULT_MESSAGE"][key] = new_msg
-                success("Message updated.")
-                wait()
-        except ValueError:
-            pass
-
-
-# =====================================================================
-# [ TIMING EDITOR ]
-# =====================================================================
-TIMING_DESCRIPTIONS = {
-    "boot_progress": "Boot sequence progress bar duration (seconds)",
-    "auth_connect": "Authentication connection delay",
-    "auth_verify": "Credential verification delay",
-    "auth_2fa": "Two-factor auth step delay",
-    "auth_session_key": "Session key generation progress",
-    "net_hop_duration": "Network hop simulation delay",
-    "net_ecdhe": "ECDHE key exchange duration",
-    "net_forward_secrecy": "Forward secrecy setup",
-    "net_alliance": "Alliance network connection",
-    "net_tunnel_progress": "Tunnel establishment progress",
-    "scan_probe_duration": "Port scan probe duration",
-    "scan_batch_duration": "Batch scan duration",
-    "decrypt_layer_duration": "Decryption layer duration",
-    "routing_validate": "Route validation time",
-    "routing_aml": "AML compliance check",
-    "routing_correspondent": "Correspondent bank routing",
-    "bridge_ping": "Bridge node ping",
-    "bridge_escrow_progress": "Escrow progress bar",
-    "bridge_sync_progress": "Sync progress bar",
-    "settlement_duration": "Final settlement duration",
+function setStatus(msg, isError) {
+    const el = document.getElementById('statusMsg');
+    el.textContent = msg;
+    el.className = 'status-msg' + (isError ? ' error' : '');
+    if (msg) setTimeout(() => { el.textContent = ''; }, 4000);
 }
 
+function loadConfig() {
+    fetch('/api/config')
+        .then(r => r.json())
+        .then(data => { config = data; renderAll(); })
+        .catch(e => setStatus('Failed to load config: ' + e, true));
+}
 
-def edit_timing(config):
-    """Edit timing configuration."""
-    while True:
-        clear()
-        header("TIMING SETTINGS", "All delays and durations (in seconds)", color=S.PURPLE)
-        print()
+function saveConfig() {
+    collectAll();
+    fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(config)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) setStatus('Configuration saved successfully!', false);
+        else setStatus('Save failed: ' + data.error, true);
+    })
+    .catch(e => setStatus('Save failed: ' + e, true));
+}
 
-        timing = config.get("TIMING", {})
+function renderAll() {
+    renderTokens();
+    renderResults();
+    renderDuration();
+    renderMessages();
+    renderBin();
+}
 
-        print(f"  {S.W}{S.BD}  {'#':<4}{'SETTING':<28}{'VALUE':<10}{'DESCRIPTION'}{S.RST}")
-        sep(70)
+function renderTokens() {
+    let html = '<h2 class="section-title">Module Tokens</h2>';
+    MODULES.forEach(mod => {
+        const tokens = (config.MODULE_TOKENS && config.MODULE_TOKENS[mod]) || {};
+        html += '<div class="module-group"><h3>' + MODULE_LABELS[mod] + '</h3><div class="token-list">';
+        Object.keys(tokens).forEach(tid => {
+            const tdata = tokens[tid];
+            html += '<div class="token-item"><div class="token-header"><span class="token-id">' + tid + '</span>';
+            html += '<button class="btn btn-danger" onclick="deleteToken(\'' + mod + '\',\'' + tid + '\')">Delete</button></div>';
+            html += '<div class="token-fields" id="tf-' + mod + '-' + tid + '">';
+            Object.keys(tdata).forEach(field => {
+                const val = tdata[field] === null ? '' : tdata[field];
+                html += '<div class="field-row"><label>' + field + '</label>';
+                html += '<input type="text" data-mod="' + mod + '" data-tid="' + tid + '" data-field="' + field + '" value="' + escHtml(String(val)) + '"></div>';
+            });
+            html += '</div></div>';
+        });
+        html += '<button class="btn" onclick="addToken(\'' + mod + '\')">+ Add Token</button>';
+        html += '</div></div>';
+    });
+    document.getElementById('tab-tokens').innerHTML = html;
+}
 
-        keys = list(timing.keys())
-        for i, key in enumerate(keys, 1):
-            val = timing[key]
-            desc = TIMING_DESCRIPTIONS.get(key, "")
-            print(f"  {S.C}  {i:<4}{S.W}{key:<28}{S.GOLD}{str(val):<10}{S.DM}{desc}{S.RST}")
+function renderResults() {
+    let html = '<h2 class="section-title">Result Configuration</h2>';
+    MODULES.forEach(mod => {
+        const status = (config.RESULT_CONFIG && config.RESULT_CONFIG[mod]) || 'SUCCESS';
+        const msg = (config.RESULT_MESSAGE && config.RESULT_MESSAGE[mod]) || '';
+        html += '<div class="module-group"><h3>' + MODULE_LABELS[mod] + '</h3>';
+        html += '<div class="token-fields">';
+        html += '<div class="field-row"><label>Status</label>';
+        html += '<select data-result-mod="' + mod + '">';
+        ['SUCCESS','FAILED','PENDING'].forEach(s => {
+            html += '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>' + s + '</option>';
+        });
+        html += '</select></div>';
+        html += '<div class="field-row"><label>Custom Message</label>';
+        html += '<textarea data-result-msg="' + mod + '">' + escHtml(msg) + '</textarea></div>';
+        html += '</div></div>';
+    });
+    document.getElementById('tab-results').innerHTML = html;
+}
 
-        print()
-        sep()
-        print(f"\n  {S.DM}  [#] Select setting number to edit")
-        print(f"  {S.DM}  [0] Back{S.RST}")
+function renderDuration() {
+    let html = '<h2 class="section-title">Loading Duration (seconds per module)</h2>';
+    html += '<p style="color:#607070;margin-bottom:15px;font-size:12px;">Controls how long the loading animation runs for each module. Replaces all individual timing settings.</p>';
+    MODULES.forEach(mod => {
+        const dur = (config.LOADING_DURATION && config.LOADING_DURATION[mod]) || 2.0;
+        html += '<div class="module-group"><h3>' + MODULE_LABELS[mod] + '</h3>';
+        html += '<div class="field-row"><label>Duration (seconds)</label>';
+        html += '<input type="number" step="0.1" min="0.1" data-dur-mod="' + mod + '" value="' + dur + '"></div>';
+        html += '</div>';
+    });
+    document.getElementById('tab-duration').innerHTML = html;
+}
 
-        choice = prompt("Action")
+function renderMessages() {
+    let html = '<h2 class="section-title">Loading Messages</h2>';
+    MODULES.forEach(mod => {
+        const msgs = (config.LOADING_MESSAGES && config.LOADING_MESSAGES[mod]) || [];
+        html += '<div class="module-group"><h3>' + MODULE_LABELS[mod] + '</h3>';
+        html += '<div id="msgs-' + mod + '">';
+        msgs.forEach((m, i) => {
+            html += '<div class="message-item"><input type="text" data-msg-mod="' + mod + '" data-msg-idx="' + i + '" value="' + escHtml(m) + '">';
+            html += '<button class="btn btn-danger" onclick="removeMsg(\'' + mod + '\',' + i + ')">X</button></div>';
+        });
+        html += '</div>';
+        html += '<button class="btn" onclick="addMsg(\'' + mod + '\')">+ Add Phrase</button>';
+        html += '</div>';
+    });
+    document.getElementById('tab-messages').innerHTML = html;
+}
 
-        if choice == "0":
-            return
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(keys):
-                key = keys[idx]
-                current = timing[key]
-                desc = TIMING_DESCRIPTIONS.get(key, "")
-                print(f"\n  {S.DM}{desc}{S.RST}")
-                print(f"  {S.DM}Current value: {current}{S.RST}")
-                new_val = prompt(f"New value for '{key}' (positive number)")
-                try:
-                    num = float(new_val)
-                    if num <= 0:
-                        error("Value must be a positive number.")
-                    else:
-                        config["TIMING"][key] = num
-                        success(f"'{key}' set to {num}.")
-                except ValueError:
-                    error("Invalid number.")
-                wait()
-        except ValueError:
-            pass
+function renderBin() {
+    let html = '<h2 class="section-title">BIN Database</h2>';
+    html += '<div class="module-group"><h3>Prefix to Card Brand Mapping</h3><div id="bin-list">';
+    const bins = config.BIN_DATABASE || {};
+    Object.keys(bins).forEach((prefix, i) => {
+        html += '<div class="bin-row"><input type="text" data-bin-key="' + i + '" value="' + escHtml(prefix) + '">';
+        html += '<input type="text" data-bin-val="' + i + '" value="' + escHtml(bins[prefix]) + '">';
+        html += '<button class="btn btn-danger" onclick="removeBin(\'' + escHtml(prefix) + '\')">X</button></div>';
+    });
+    html += '</div><button class="btn" onclick="addBin()">+ Add Entry</button></div>';
+    document.getElementById('tab-bin').innerHTML = html;
+}
+
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function collectAll() {
+    // Collect tokens
+    document.querySelectorAll('[data-mod][data-tid][data-field]').forEach(el => {
+        const mod = el.dataset.mod, tid = el.dataset.tid, field = el.dataset.field;
+        if (!config.MODULE_TOKENS) config.MODULE_TOKENS = {};
+        if (!config.MODULE_TOKENS[mod]) config.MODULE_TOKENS[mod] = {};
+        if (!config.MODULE_TOKENS[mod][tid]) config.MODULE_TOKENS[mod][tid] = {};
+        const val = el.value;
+        if (field === 'allowed_card_last4' && val === '') {
+            config.MODULE_TOKENS[mod][tid][field] = null;
+        } else {
+            config.MODULE_TOKENS[mod][tid][field] = val;
+        }
+    });
+    // Collect results
+    document.querySelectorAll('[data-result-mod]').forEach(el => {
+        if (!config.RESULT_CONFIG) config.RESULT_CONFIG = {};
+        config.RESULT_CONFIG[el.dataset.resultMod] = el.value;
+    });
+    document.querySelectorAll('[data-result-msg]').forEach(el => {
+        if (!config.RESULT_MESSAGE) config.RESULT_MESSAGE = {};
+        config.RESULT_MESSAGE[el.dataset.resultMsg] = el.value;
+    });
+    // Collect duration
+    document.querySelectorAll('[data-dur-mod]').forEach(el => {
+        if (!config.LOADING_DURATION) config.LOADING_DURATION = {};
+        config.LOADING_DURATION[el.dataset.durMod] = parseFloat(el.value) || 2.0;
+    });
+    // Collect messages
+    let msgMap = {};
+    document.querySelectorAll('[data-msg-mod]').forEach(el => {
+        const mod = el.dataset.msgMod;
+        if (!msgMap[mod]) msgMap[mod] = [];
+        msgMap[mod].push(el.value);
+    });
+    if (!config.LOADING_MESSAGES) config.LOADING_MESSAGES = {};
+    MODULES.forEach(mod => {
+        if (msgMap[mod]) config.LOADING_MESSAGES[mod] = msgMap[mod];
+    });
+    // Collect BIN
+    let newBin = {};
+    const binKeys = document.querySelectorAll('[data-bin-key]');
+    const binVals = document.querySelectorAll('[data-bin-val]');
+    for (let i = 0; i < binKeys.length; i++) {
+        const k = binKeys[i].value.trim();
+        const v = binVals[i].value.trim();
+        if (k) newBin[k] = v;
+    }
+    config.BIN_DATABASE = newBin;
+}
+
+function addToken(mod) {
+    const tid = prompt('Enter new Token ID (e.g. ABC12):');
+    if (!tid) return;
+    const id = tid.toUpperCase().trim();
+    if (!id) return;
+    if (!config.MODULE_TOKENS) config.MODULE_TOKENS = {};
+    if (!config.MODULE_TOKENS[mod]) config.MODULE_TOKENS[mod] = {};
+    if (config.MODULE_TOKENS[mod][id]) { alert('Token already exists!'); return; }
+    const template = JSON.parse(JSON.stringify(TOKEN_TEMPLATES[mod] || {name:''}));
+    config.MODULE_TOKENS[mod][id] = template;
+    collectAll();
+    renderTokens();
+}
+
+function deleteToken(mod, tid) {
+    if (!confirm('Delete token ' + tid + '?')) return;
+    collectAll();
+    delete config.MODULE_TOKENS[mod][tid];
+    renderTokens();
+}
+
+function addMsg(mod) {
+    collectAll();
+    if (!config.LOADING_MESSAGES) config.LOADING_MESSAGES = {};
+    if (!config.LOADING_MESSAGES[mod]) config.LOADING_MESSAGES[mod] = [];
+    config.LOADING_MESSAGES[mod].push('New loading phrase');
+    renderMessages();
+}
+
+function removeMsg(mod, idx) {
+    collectAll();
+    config.LOADING_MESSAGES[mod].splice(idx, 1);
+    renderMessages();
+}
+
+function addBin() {
+    collectAll();
+    if (!config.BIN_DATABASE) config.BIN_DATABASE = {};
+    const prefix = prompt('Enter BIN prefix:');
+    if (!prefix) return;
+    const brand = prompt('Enter card brand:');
+    if (!brand) return;
+    config.BIN_DATABASE[prefix.trim()] = brand.trim();
+    renderBin();
+}
+
+function removeBin(prefix) {
+    if (!confirm('Remove BIN entry: ' + prefix + '?')) return;
+    collectAll();
+    delete config.BIN_DATABASE[prefix];
+    renderBin();
+}
+
+window.onload = loadConfig;
+</script>
+</body>
+</html>"""
+
 
 
 # =====================================================================
-# [ LOADING MESSAGES EDITOR ]
+# [ REQUEST HANDLER ]
 # =====================================================================
-def edit_loading(config):
-    """Edit loading messages and duration."""
-    while True:
-        clear()
-        header("LOADING MESSAGES & DURATION", "Per-module loading phrases and timing", color=S.GOLD)
-        print()
+class ConfigHandler(BaseHTTPRequestHandler):
+    """HTTP request handler for the configuration editor."""
 
-        messages = config.get("LOADING_MESSAGES", {})
-        duration = config.get("LOADING_DURATION", {})
+    def log_message(self, format, *args):
+        """Override to customize logging."""
+        print(f"  [HTTP] {args[0]}")
 
-        for i, key in enumerate(MODULE_KEYS, 1):
-            phrases = messages.get(key, [])
-            dur = duration.get(key, 2.0)
-            color = S.ORANGE if i <= 1 else S.C if i <= 2 else S.TEAL if i <= 3 else S.PURPLE if i <= 4 else S.GOLD if i <= 5 else S.B if i <= 6 else S.G
-            print(f"  {color}{S.BD} [{i}]{S.RST}  {S.W}{S.BD}{MODULE_NAMES[key]}{S.RST}")
-            print(f"        {S.DM}{len(phrases)} phrases | Duration: {dur}s{S.RST}\n")
+    def do_GET(self):
+        """Handle GET requests."""
+        path = urlparse(self.path).path
 
-        print(f"  {S.R}{S.BD} [0]{S.RST}  {S.DM}Back to Main Menu{S.RST}")
-        sep()
+        if path == "/" or path == "":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(HTML_PAGE.encode("utf-8"))
 
-        choice = prompt("Select module [0-7]")
+        elif path == "/api/config":
+            config = load_config()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(config, indent=2).encode("utf-8"))
 
-        if choice == "0":
-            return
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(MODULE_KEYS):
-                edit_loading_detail(config, MODULE_KEYS[idx])
-        except ValueError:
-            pass
-
-
-def edit_loading_detail(config, module_key):
-    """Edit loading phrases for a specific module."""
-    while True:
-        clear()
-        header(f"LOADING: {MODULE_NAMES[module_key].upper()}", color=S.GOLD)
-        print()
-
-        messages = config.get("LOADING_MESSAGES", {}).get(module_key, [])
-        duration = config.get("LOADING_DURATION", {}).get(module_key, 2.0)
-
-        print(f"  {S.W}{S.BD}  Duration: {S.GOLD}{duration}s{S.RST}")
-        print()
-
-        if not messages:
-            info("No loading phrases configured.", prefix="EMPTY")
         else:
-            print(f"  {S.W}{S.BD}  Loading Phrases:{S.RST}")
-            sep(50)
-            for i, msg in enumerate(messages, 1):
-                print(f"  {S.C}  [{i:2d}]{S.RST} {S.DM}{msg}{S.RST}")
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Not found"}).encode("utf-8"))
 
-        print()
-        sep()
-        print(f"\n  {S.DM}  [#] Select phrase to edit")
-        print(f"  {S.DM}  [A] Add new phrase")
-        print(f"  {S.DM}  [R] Remove a phrase")
-        print(f"  {S.DM}  [T] Set duration")
-        print(f"  {S.DM}  [P] Preview loading animation")
-        print(f"  {S.DM}  [0] Back{S.RST}")
+    def do_POST(self):
+        """Handle POST requests."""
+        path = urlparse(self.path).path
 
-        choice = prompt("Action").upper()
+        if path == "/api/config":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
 
-        if choice == "0":
-            return
-        elif choice == "A":
-            new_phrase = prompt("New loading phrase")
-            if new_phrase:
-                if module_key not in config.get("LOADING_MESSAGES", {}):
-                    config["LOADING_MESSAGES"][module_key] = []
-                config["LOADING_MESSAGES"][module_key].append(new_phrase)
-                success(f"Phrase added: '{new_phrase}'")
-                wait()
-        elif choice == "R":
-            if not messages:
-                error("No phrases to remove.")
-                wait()
-                continue
-            num = prompt("Phrase number to remove")
             try:
-                pidx = int(num) - 1
-                if 0 <= pidx < len(messages):
-                    removed = config["LOADING_MESSAGES"][module_key].pop(pidx)
-                    success(f"Removed: '{removed}'")
-                else:
-                    error("Invalid phrase number.")
-            except ValueError:
-                error("Invalid input.")
-            wait()
-        elif choice == "T":
-            print(f"\n  {S.DM}Current duration: {duration}s{S.RST}")
-            new_dur = prompt("New duration (positive number, in seconds)")
-            try:
-                d = float(new_dur)
-                if d <= 0:
-                    error("Duration must be positive.")
-                else:
-                    config["LOADING_DURATION"][module_key] = d
-                    success(f"Duration set to {d}s.")
-            except ValueError:
-                error("Invalid number.")
-            wait()
-        elif choice == "P":
-            # Preview loading animation
-            print(f"\n  {S.DM}Preview (showing phrases in sequence):{S.RST}\n")
-            import time
-            if messages:
-                per_msg = duration / len(messages) if messages else 1
-                for msg in messages:
-                    print(f"  {S.C}[*]{S.RST} {msg}...")
-                    time.sleep(min(per_msg, 0.5))
+                new_config = json.loads(body.decode("utf-8"))
+            except json.JSONDecodeError as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": f"Invalid JSON: {e}"}).encode("utf-8"))
+                return
+
+            ok, err = save_config(new_config)
+            if ok:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True}).encode("utf-8"))
             else:
-                info("No phrases to preview.")
-            print(f"\n  {S.G}[Done]{S.RST} Total duration would be: {duration}s")
-            wait()
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": err}).encode("utf-8"))
+
         else:
-            try:
-                pidx = int(choice) - 1
-                if 0 <= pidx < len(messages):
-                    print(f"\n  {S.DM}Current: {messages[pidx]}{S.RST}")
-                    new_text = prompt("New text (leave empty to cancel)")
-                    if new_text:
-                        config["LOADING_MESSAGES"][module_key][pidx] = new_text
-                        success("Phrase updated.")
-                    wait()
-            except ValueError:
-                pass
-
-
-# =====================================================================
-# [ MAIN MENU ]
-# =====================================================================
-def main_menu(config):
-    """Display the main editor menu."""
-    clear()
-    header("GPSE CONFIGURATION EDITOR", "Terminal-based settings manager v1.0", color=S.C)
-    print()
-
-    menu_items = [
-        ("1", "Module Tokens", "Edit access tokens for all 7 systems", S.ORANGE),
-        ("2", "Result Configuration", "Set SUCCESS/FAILED/PENDING per module", S.G),
-        ("3", "Result Messages", "Custom messages on module completion", S.TEAL),
-        ("4", "Timing Settings", "All delays and duration values", S.PURPLE),
-        ("5", "Loading Messages", "Per-module loading phrases & duration", S.GOLD),
-    ]
-
-    for num, name, desc, color in menu_items:
-        print(f"  {color}{S.BD} [{num}]{S.RST}  {S.W}{S.BD}{name}{S.RST}")
-        print(f"        {S.DM}{desc}{S.RST}\n")
-
-    print(f"  {S.G}{S.BD} [6]{S.RST}  {S.W}{S.BD}Save & Exit{S.RST}")
-    print(f"        {S.DM}Write changes to config.json and exit{S.RST}\n")
-    print(f"  {S.R}{S.BD} [0]{S.RST}  {S.DM}Exit Without Saving{S.RST}\n")
-    sep()
-
-    choice = prompt("Select option [0-6]")
-    return choice
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Not found"}).encode("utf-8"))
 
 
 # =====================================================================
 # [ MAIN EXECUTION ]
 # =====================================================================
 def main():
-    """Main editor entry point."""
-    S.init()
+    """Start the web-based configuration editor."""
+    print()
+    print("  ╔══════════════════════════════════════════════════╗")
+    print("  ║   GPSE Configuration Editor v2.0                ║")
+    print("  ║   Web-based settings manager                    ║")
+    print("  ╠══════════════════════════════════════════════════╣")
+    print("  ║                                                  ║")
+    print("  ║   URL: http://localhost:8585                     ║")
+    print("  ║                                                  ║")
+    print("  ║   Press Ctrl+C to stop the server               ║")
+    print("  ╚══════════════════════════════════════════════════╝")
+    print()
 
-    config = load_config()
-    original = json.dumps(config, sort_keys=True)
-
-    while True:
-        choice = main_menu(config)
-
-        if choice == "0":
-            current = json.dumps(config, sort_keys=True)
-            if current != original:
-                if confirm("You have unsaved changes. Exit anyway?"):
-                    clear()
-                    info("Exited without saving.", prefix="EXIT")
-                    print()
-                    break
-                else:
-                    continue
-            clear()
-            info("No changes made. Exiting.", prefix="EXIT")
-            print()
-            break
-        elif choice == "1":
-            edit_module_tokens(config)
-        elif choice == "2":
-            edit_result_config(config)
-        elif choice == "3":
-            edit_result_messages(config)
-        elif choice == "4":
-            edit_timing(config)
-        elif choice == "5":
-            edit_loading(config)
-        elif choice == "6":
-            # Save & Exit
-            clear()
-            header("SAVE CONFIGURATION", color=S.G)
-            print()
-            info("Validating JSON structure...")
-
-            try:
-                json.dumps(config, indent=2, ensure_ascii=False)
-                success("JSON validation passed.")
-            except (TypeError, ValueError) as e:
-                error(f"JSON validation failed: {e}")
-                error("Cannot save. Please fix the configuration.")
-                wait()
-                continue
-
-            print()
-            if confirm("Write changes to config.json?"):
-                if save_config(config):
-                    success("Configuration saved successfully!")
-                    print(f"\n  {S.DM}  File: {CONFIG_PATH}{S.RST}")
-                else:
-                    error("Failed to save configuration.")
-                wait()
-                break
-        else:
-            error("Invalid selection.")
-            import time
-            time.sleep(0.5)
+    server = HTTPServer(("127.0.0.1", PORT), ConfigHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n  [*] Server stopped.")
+        server.server_close()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print(f"\n\n  {S.R}[!] Editor terminated.{S.RST}")
-        print(f"  {S.DM}Changes were NOT saved.{S.RST}\n")
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n  {S.R}[ERROR] {e}{S.RST}\n")
-        sys.exit(1)
+    main()
