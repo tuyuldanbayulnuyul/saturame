@@ -130,6 +130,7 @@ def save_config(config):
     try:
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             f.write(json_str)
+        os.chmod(CONFIG_PATH, 0o600)
         return True
     except IOError as e:
         error(f"Cannot write config.json: {e}")

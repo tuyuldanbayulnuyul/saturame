@@ -330,8 +330,9 @@ def save_config():
     try:
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-    except IOError:
-        pass
+        os.chmod(CONFIG_PATH, 0o600)
+    except IOError as e:
+        print(f"[WARNING] Failed to save config: {e}", file=sys.stderr)
 
 
 # Load configuration at module level
@@ -657,6 +658,8 @@ def module_spinner(module_key, count=3):
     messages = LOADING_MESSAGES.get(module_key, ["Processing..."])
     duration = LOADING_DURATION.get(module_key, 2.0)
     per_msg_duration = duration / min(count, len(messages))
+    min_duration = 0.5
+    per_msg_duration = max(per_msg_duration, min_duration)
     selected = messages[:count] if len(messages) >= count else messages
     for msg in selected:
         spinner(msg, per_msg_duration)
@@ -1833,7 +1836,11 @@ def module_rtgs():
 # =====================================================================
 def launch_settings_editor():
     """Launch the interactive configuration editor."""
-    editor_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(), "config_editor.py")
+    try:
+        base = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        base = os.getcwd()
+    editor_path = os.path.join(base, "config_editor.py")
     if not os.path.exists(editor_path):
         print(f"\n  {S.R}[ERROR]{S.RST} config_editor.py not found.")
         input(f"\n  {S.DM}Press ENTER to return...{S.RST}")
