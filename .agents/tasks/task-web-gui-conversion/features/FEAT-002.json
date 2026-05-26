@@ -1,0 +1,40 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Convert engine.py from a terminal CLI to a web-based GUI running on localhost using Python http.server. The web UI should have a professional modern dark terminal-like appearance in the browser, with all 7 modules working through the web interface. The engine must also adopt the simplified timing (using only LOADING_DURATION instead of the old TIMING dictionary with 20+ keys).",
+  "status": "in_progress",
+  "steps": [
+    "Rewrite engine.py to serve a web-based GUI on port 8080 using http.server (HTTPServer + BaseHTTPRequestHandler).",
+    "Create embedded HTML/CSS/JS with: dark terminal-like UI (black/very dark background, green/cyan monospace text, scan-line or CRT effects optional), responsive layout, professional appearance.",
+    "Main page shows the GPSE logo/header (ASCII art rendered in a pre/code block or stylized), system status, and the 7 module selection buttons plus a Settings button (links to port 8585).",
+    "Each module flow becomes a multi-step web form/wizard: Step 1 = token auth input, Step 2 = module-specific inputs (card details, bank details, etc.), Step 3 = animated processing (CSS animations simulating progress bars, spinners, hex scans), Step 4 = result display (success/failed/pending box).",
+    "Implement the processing animations in pure CSS/JS: progress bars that fill over the LOADING_DURATION time, rotating spinners, typing effects for loading messages, and the final settlement bar that shows success/fail/pending based on RESULT_CONFIG.",
+    "Remove all terminal-specific code: ANSI escape codes (class S), tty/termios imports, sys.stdout.write animations, input() calls, clear() function, time.sleep() calls. Replace with web equivalents.",
+    "Update timing logic: remove all references to the old TIMING dictionary keys (boot_progress, auth_connect, auth_verify, auth_2fa, auth_session_key, net_hop_duration, net_ecdhe, net_forward_secrecy, net_alliance, net_tunnel_progress, scan_probe_duration, scan_batch_duration, decrypt_layer_duration, routing_validate, routing_aml, routing_correspondent, bridge_ping, bridge_escrow_progress, bridge_sync_progress, settlement_duration). Instead, use LOADING_DURATION[module_key] as the total duration for all animations in that module, auto-distributing it across the animation steps.",
+    "API endpoints needed: POST /api/auth/<module> (validate token), POST /api/process/<module> (process transaction with form data, return result based on RESULT_CONFIG), GET /api/status (system info).",
+    "Keep all existing business logic: BIN detection, card validation, allowed_card_last4 check, interbank password auth, etc. Just move it from interactive CLI to request/response API + web form.",
+    "The boot sequence becomes a CSS/JS animation on page load (showing boot items with checkmarks appearing sequentially).",
+    "Print startup message with URL (http://localhost:8080) when server starts. Include link to settings editor at port 8585."
+  ],
+  "acceptance_criteria": [
+    "engine.py compiles without errors",
+    "Running python3 engine.py starts an HTTP server on port 8080",
+    "GET http://localhost:8080/ returns a complete HTML page with dark terminal theme",
+    "The main page shows all 7 modules as clickable options",
+    "Each module has a working multi-step flow (auth -> inputs -> processing animation -> result)",
+    "Processing animations run for approximately LOADING_DURATION seconds per module",
+    "Results display correctly based on RESULT_CONFIG (SUCCESS/FAILED/PENDING)",
+    "No references to old TIMING dictionary keys remain in engine.py",
+    "No ANSI escape codes or terminal-specific code remains",
+    "All 7 modules are functional through the web interface",
+    "config.json is loaded and used for tokens, results, loading messages, and duration"
+  ],
+  "verification": [
+    "python3 -c \"compile(open('engine.py').read(), 'engine.py', 'exec')\" succeeds",
+    "grep -c 'TIMING\\[' engine.py returns 0 (no old TIMING references)",
+    "grep -c '\\\\033\\[' engine.py returns 0 (no ANSI codes)",
+    "grep -c 'LOADING_DURATION' engine.py confirms usage of new timing"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
