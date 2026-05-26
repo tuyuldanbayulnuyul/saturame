@@ -610,10 +610,12 @@ class ConfigHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/config":
             config = load_config()
+            body = json.dumps(config, indent=2).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(json.dumps(config, indent=2).encode("utf-8"))
+            self.wfile.write(body)
 
         else:
             self.send_response(404)
@@ -636,6 +638,16 @@ class ConfigHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": False, "error": f"Invalid JSON: {e}"}).encode("utf-8"))
+                return
+
+            # Validate required top-level keys
+            required_keys = ["MODULE_TOKENS", "RESULT_CONFIG", "RESULT_MESSAGE", "BIN_DATABASE", "LOADING_MESSAGES", "LOADING_DURATION"]
+            missing_keys = [k for k in required_keys if k not in new_config]
+            if missing_keys:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": f"Missing required keys: {', '.join(missing_keys)}"}).encode("utf-8"))
                 return
 
             ok, err = save_config(new_config)

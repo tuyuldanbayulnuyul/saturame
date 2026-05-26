@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import hashlib
+import hmac
 import datetime
 import string
 import random
@@ -268,17 +269,29 @@ _DEFAULT_LOADING_DURATION = {
 # [ CONFIG LOAD ]
 # =====================================================================
 def load_config():
-    """Load configuration from config.json. Falls back to defaults if missing."""
+    """Load configuration from config.json. Falls back to existing global values on error."""
     global MODULE_TOKENS, RESULT_CONFIG, RESULT_MESSAGE, BIN_DATABASE
     global LOADING_MESSAGES, LOADING_DURATION
 
-    config = None
-    if os.path.exists(CONFIG_PATH):
+    if not os.path.exists(CONFIG_PATH):
+        # No config file: set defaults only if globals are not yet initialized
         try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            config = None
+            MODULE_TOKENS
+        except NameError:
+            MODULE_TOKENS = _DEFAULT_MODULE_TOKENS
+            RESULT_CONFIG = _DEFAULT_RESULT_CONFIG
+            RESULT_MESSAGE = _DEFAULT_RESULT_MESSAGE
+            BIN_DATABASE = _DEFAULT_BIN_DATABASE
+            LOADING_MESSAGES = _DEFAULT_LOADING_MESSAGES
+            LOADING_DURATION = _DEFAULT_LOADING_DURATION
+        return
+
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, IOError, OSError):
+        # Corrupt or unreadable file: don't update globals, keep existing values
+        return
 
     if config:
         MODULE_TOKENS = config.get("MODULE_TOKENS", _DEFAULT_MODULE_TOKENS)
@@ -287,13 +300,6 @@ def load_config():
         BIN_DATABASE = config.get("BIN_DATABASE", _DEFAULT_BIN_DATABASE)
         LOADING_MESSAGES = config.get("LOADING_MESSAGES", _DEFAULT_LOADING_MESSAGES)
         LOADING_DURATION = config.get("LOADING_DURATION", _DEFAULT_LOADING_DURATION)
-    else:
-        MODULE_TOKENS = _DEFAULT_MODULE_TOKENS
-        RESULT_CONFIG = _DEFAULT_RESULT_CONFIG
-        RESULT_MESSAGE = _DEFAULT_RESULT_MESSAGE
-        BIN_DATABASE = _DEFAULT_BIN_DATABASE
-        LOADING_MESSAGES = _DEFAULT_LOADING_MESSAGES
-        LOADING_DURATION = _DEFAULT_LOADING_DURATION
 
 
 # Load configuration at module level
@@ -1865,7 +1871,8 @@ class GPSEHandler(BaseHTTPRequestHandler):
             return
 
         pw_hash = hashlib.sha256(password.encode()).hexdigest()
-        if username == admin_token.get("username") and pw_hash == admin_token.get("password_hash"):
+        stored_hash = admin_token.get("password_hash", "")
+        if username == admin_token.get("username") and hmac.compare_digest(pw_hash, stored_hash):
             self.send_json({"success": True, "user_data": {"name": admin_token.get("name", "ADMIN")}})
         else:
             self.send_json({"success": False, "error": "ACCESS DENIED - Invalid credentials"})
@@ -2056,9 +2063,9 @@ class GPSEServer(HTTPServer):
 
 
 def main():
-    """Start the GPSE web server on port 8080."""
-    port = 8080
-    server = GPSEServer(('', port), GPSEHandler)
+    """Start the GPSE web server."""
+    port = int(os.environ.get("GPSE_PORT", 8080))
+    server = GPSEServer(('127.0.0.1', port), GPSEHandler)
 
     print(f"")
     print(f"  =====================================================")
