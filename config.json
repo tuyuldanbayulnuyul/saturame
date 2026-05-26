@@ -1,0 +1,220 @@
+{
+  "MODULE_TOKENS": {
+    "protocol_transaction": {
+      "83GIM": {
+        "name": "DARKOATH",
+        "cardholder": "LAWRENCE CLAYTON",
+        "bank_provider": "BANK OF MONTREAL",
+        "iso_country": "CANADA",
+        "iso_a2": "CA",
+        "iso_a3": "CAN",
+        "iso_num": "124",
+        "allowed_card_last4": "6498"
+      },
+      "W82KB": {
+        "name": "MZKR SGAR",
+        "cardholder": "MICHAEL SAGAR",
+        "bank_provider": "UBS GROUP AG",
+        "iso_country": "SWITZERLAND",
+        "iso_a2": "CH",
+        "iso_a3": "CHE",
+        "iso_num": "756",
+        "allowed_card_last4": null
+      }
+    },
+    "interbank": {
+      "ADMIN": {
+        "name": "SYSTEM ADMIN",
+        "username": "admin",
+        "password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+      }
+    },
+    "ip_to_ip": {
+      "7X9KL": {
+        "name": "NEXUS PRIME",
+        "operator": "JAMES WHITFIELD",
+        "clearance": "LEVEL-5",
+        "region": "EMEA"
+      },
+      "R4T2P": {
+        "name": "VECTOR NODE",
+        "operator": "SARAH CHEN",
+        "clearance": "LEVEL-4",
+        "region": "APAC"
+      }
+    },
+    "s2s": {
+      "API01": {
+        "name": "MERCURY ENGINE",
+        "merchant": "GLOBAL PAYMENTS INC",
+        "api_version": "v3.2.1",
+        "environment": "PRODUCTION"
+      },
+      "API02": {
+        "name": "ATLAS CORE",
+        "merchant": "STRIPE INTERNATIONAL",
+        "api_version": "v4.0.0",
+        "environment": "PRODUCTION"
+      }
+    },
+    "gpi": {
+      "GPI01": {
+        "name": "SWIFT GPI TRACKER",
+        "institution": "DEUTSCHE BANK AG",
+        "bic": "DEUTDEFF",
+        "gpi_member_id": "GPIDB2024"
+      },
+      "GPI02": {
+        "name": "GPI RELAY NODE",
+        "institution": "HSBC HOLDINGS",
+        "bic": "HSBCGB2L",
+        "gpi_member_id": "GPIHSBC24"
+      }
+    },
+    "mt103": {
+      "MT101": {
+        "name": "SWIFT ALLIANCE LITE2",
+        "institution": "JPMORGAN CHASE",
+        "bic": "CHASUS33",
+        "branch": "NEW YORK HQ"
+      },
+      "MT102": {
+        "name": "SWIFT FIN GATEWAY",
+        "institution": "BNP PARIBAS",
+        "bic": "BNPAFRPP",
+        "branch": "PARIS MAIN"
+      }
+    },
+    "rtgs": {
+      "RTG01": {
+        "name": "FEDWIRE FUNDS",
+        "system": "FEDERAL RESERVE",
+        "routing": "021000021",
+        "node": "PRIMARY-NYC"
+      },
+      "RTG02": {
+        "name": "TARGET2 LINK",
+        "system": "EUROPEAN CENTRAL BANK",
+        "routing": "MARKDEFF",
+        "node": "FRANKFURT-MAIN"
+      }
+    }
+  },
+  "RESULT_CONFIG": {
+    "protocol_transaction": "SUCCESS",
+    "interbank": "FAILED",
+    "ip_to_ip": "SUCCESS",
+    "s2s": "SUCCESS",
+    "gpi": "SUCCESS",
+    "mt103": "SUCCESS",
+    "rtgs": "SUCCESS"
+  },
+  "RESULT_MESSAGE": {
+    "protocol_transaction": "",
+    "interbank": "Validator quorum unreachable — TX voided",
+    "ip_to_ip": "",
+    "s2s": "",
+    "gpi": "",
+    "mt103": "",
+    "rtgs": ""
+  },
+  "BIN_DATABASE": {
+    "4": "VISA",
+    "40": "VISA CLASSIC",
+    "41": "VISA CLASSIC",
+    "42": "VISA CLASSIC",
+    "43": "VISA CLASSIC",
+    "44": "VISA GOLD",
+    "45": "VISA PLATINUM",
+    "46": "VISA BUSINESS",
+    "47": "VISA SIGNATURE",
+    "48": "VISA INFINITE",
+    "49": "VISA CORPORATE",
+    "51": "MASTERCARD STANDARD",
+    "52": "MASTERCARD STANDARD",
+    "53": "MASTERCARD WORLD",
+    "54": "MASTERCARD WORLD ELITE",
+    "55": "MASTERCARD CORPORATE",
+    "22": "MASTERCARD (2-SERIES)",
+    "23": "MASTERCARD (2-SERIES)",
+    "24": "MASTERCARD (2-SERIES)",
+    "25": "MASTERCARD (2-SERIES)",
+    "26": "MASTERCARD (2-SERIES)",
+    "27": "MASTERCARD (2-SERIES)",
+    "34": "AMERICAN EXPRESS",
+    "37": "AMERICAN EXPRESS",
+    "60": "DISCOVER",
+    "65": "DISCOVER",
+    "35": "JCB",
+    "62": "UNIONPAY",
+    "36": "DINERS CLUB",
+    "38": "DINERS CLUB"
+  },
+  "LOADING_MESSAGES": {
+    "protocol_transaction": [
+      "Initializing protocol handshake layer",
+      "Establishing issuer authentication channel",
+      "Validating cryptographic session keys",
+      "Synchronizing with card network gateway",
+      "Performing EMV chip verification sequence",
+      "Generating digital signature envelope"
+    ],
+    "interbank": [
+      "Connecting to SWIFT Alliance network",
+      "Synchronizing interbank ledger nodes",
+      "Verifying correspondent bank routes",
+      "Authenticating with central clearing house",
+      "Validating nostro/vostro account balances",
+      "Establishing multi-hop settlement path"
+    ],
+    "ip_to_ip": [
+      "Initializing peer-to-peer tunnel interface",
+      "Performing mutual TLS certificate exchange",
+      "Establishing encrypted data channel",
+      "Calibrating low-latency routing protocol",
+      "Verifying endpoint identity signatures",
+      "Synchronizing bilateral netting engine"
+    ],
+    "s2s": [
+      "Authenticating REST API credentials",
+      "Establishing OAuth 2.0 bearer session",
+      "Validating merchant webhook endpoints",
+      "Initializing idempotency key registry",
+      "Synchronizing server-side ledger state",
+      "Preparing JSON settlement payload"
+    ],
+    "gpi": [
+      "Connecting to SWIFT GPI Tracker service",
+      "Registering unique end-to-end transaction reference",
+      "Validating GPI member institution credentials",
+      "Synchronizing with gpi.swift.com directory",
+      "Establishing UETR tracking pipeline",
+      "Confirming SLA compliance parameters"
+    ],
+    "mt103": [
+      "Connecting to SWIFT FIN Y-Copy service",
+      "Validating MT103 message syntax (ISO 15022)",
+      "Performing BIC code directory lookup",
+      "Establishing FIN session with receiver",
+      "Generating message authentication code",
+      "Submitting to SWIFT network queue"
+    ],
+    "rtgs": [
+      "Connecting to central bank RTGS node",
+      "Validating participant bank credentials",
+      "Checking real-time liquidity positions",
+      "Reserving funds in settlement account",
+      "Entering payment into gross settlement queue",
+      "Initiating irrevocable fund transfer"
+    ]
+  },
+  "LOADING_DURATION": {
+    "protocol_transaction": 2.0,
+    "interbank": 2.5,
+    "ip_to_ip": 2.0,
+    "s2s": 2.0,
+    "gpi": 2.5,
+    "mt103": 2.5,
+    "rtgs": 2.5
+  }
+}

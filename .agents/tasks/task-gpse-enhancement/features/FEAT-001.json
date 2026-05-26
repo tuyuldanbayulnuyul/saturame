@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Extract all hardcoded configuration into config.json, create config loading/saving infrastructure, add custom loading messages per module, implement MM/YY auto-format, and enhance BIN detection display to show full customer data.",
+  "status": "completed",
+  "steps": [
+    "Step 1: Create a config.json file at /projects/sandbox/saturame/config.json containing all externalized settings: MODULE_TOKENS (all 7 systems with full data), RESULT_CONFIG, RESULT_MESSAGE, TIMING, BIN_DATABASE, LOADING_MESSAGES (professional per-system loading phrases with configurable duration), and LOADING_DURATION (per-module loading time in seconds). The MODULE_TOKENS for protocol_transaction must include all fields: name, cardholder, bank_provider, iso_country, iso_a2, iso_a3, iso_num, allowed_card_last4. LOADING_MESSAGES should have module-specific professional phrases like: protocol_transaction: ['Initializing protocol handshake layer', 'Establishing issuer authentication channel', 'Validating cryptographic session keys'], interbank: ['Connecting to SWIFT Alliance network', 'Synchronizing interbank ledger nodes', 'Verifying correspondent bank routes'], etc.",
+    "Step 2: Modify engine.py to load configuration from config.json at startup. Add a load_config() function near the top that reads config.json if it exists, otherwise uses built-in defaults and creates config.json. Add a save_config() function. Replace all references to hardcoded MODULE_TOKENS, RESULT_CONFIG, RESULT_MESSAGE, TIMING with the loaded config dict. Keep BIN_DATABASE as is in the code (it is reference data, not user config) but also make it overridable from config.",
+    "Step 3: In module_protocol_transaction() (around line 830), after BIN detection and the line that prints '[checkmark] BIN DETECTED:', add display of ALL customer fields from the token data: cardholder, bank_provider, iso_country, iso_a2, iso_a3, iso_num. Format it as a professional info box. Example: after authentication succeeds and card is validated, show a box like: 'CARDHOLDER: LAWRENCE CLAYTON / BANK: BANK OF MONTREAL / COUNTRY: CANADA (CA/CAN/124)'.",
+    "Step 4: Implement MM/YY auto-format in module_protocol_transaction(). Replace the simple input() call for expiry date with a custom function that reads character by character (using tty/termios on Unix, msvcrt on Windows) and automatically inserts '/' after the user types 2 digits for month. Display the formatted input in real-time. Fallback to regular input() if terminal raw mode is not available.",
+    "Step 5: Replace all generic spinner/loading calls throughout all 7 modules with module-specific professional loading messages from the config. Each module should use its own set of loading phrases from config['LOADING_MESSAGES'][module_key]. The duration should be configurable from config['LOADING_DURATION'][module_key] (defaulting to the existing TIMING values). Professional loading phrases should be domain-specific and technical-sounding.",
+    "Step 6: Enhance the overall terminal UI throughout engine.py - improve the main_menu() display with better spacing and alignment, improve the header() function to support optional status indicators, add a professional footer to each module showing session info, and ensure consistent styling across all modules. Add a system status bar concept that shows at the top of each module."
+  ],
+  "acceptance_criteria": [
+    "config.json is created and contains valid JSON with all MODULE_TOKENS, RESULT_CONFIG, RESULT_MESSAGE, TIMING, LOADING_MESSAGES, and LOADING_DURATION",
+    "engine.py loads from config.json and falls back to defaults if file is missing",
+    "Module 1 BIN detection displays all customer fields (cardholder, bank_provider, iso_country, iso_a2, iso_a3, iso_num) in a formatted box",
+    "Module 1 expiry input auto-inserts '/' after 2 digits of month are typed",
+    "Each module uses its own professional loading messages from config",
+    "All python files compile without errors (python3 -c import py_compile check)",
+    "config.json is valid JSON parseable by json.loads()"
+  ],
+  "verification": [
+    "python3 -c \"import py_compile; py_compile.compile('/projects/sandbox/saturame/engine.py', doraise=True); print('engine.py OK')\"",
+    "python3 -c \"import json; data=json.load(open('/projects/sandbox/saturame/config.json')); assert 'MODULE_TOKENS' in data; assert 'LOADING_MESSAGES' in data; assert 'protocol_transaction' in data['MODULE_TOKENS']; assert 'cardholder' in list(data['MODULE_TOKENS']['protocol_transaction'].values())[0]; print('config.json OK')\"",
+    "python3 -c \"import sys; sys.path.insert(0,'/projects/sandbox/saturame'); exec(open('/projects/sandbox/saturame/engine.py').read().split('if __name__')[0]); print('Module loads OK')\""
+  ],
+  "blocked_reason": null,
+  "findings": "CONFIG_PATH uses try/except for __file__ to handle exec() contexts where __file__ is not defined. The interbank password_hash in config.json stores the pre-computed sha256 hex string directly. The module_spinner function pulls messages from LOADING_MESSAGES config and distributes LOADING_DURATION evenly across the requested count of messages."
+}
