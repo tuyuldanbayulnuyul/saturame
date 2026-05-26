@@ -5,7 +5,7 @@ GLOBAL PAYMENT SETTLEMENT ENGINE v5.0
 Build 2026.05.26 | Multi-Protocol Financial Terminal
 [ SIMULATION / DEMONSTRATION TOOL ONLY ]
 
-Web-based GUI running on localhost:8080 using Python http.server.
+Web-based GUI running on localhost:8686 using Python http.server.
 All HTML/CSS/JS is embedded as Python string constants.
 LOADING_DURATION controls all animation timing (auto-distributed).
 """
@@ -2064,7 +2064,7 @@ class GPSEServer(HTTPServer):
 
 def main():
     """Start the GPSE web server."""
-    port = int(os.environ.get("GPSE_PORT", 8080))
+    port = int(os.environ.get("GPSE_PORT", 8686))
     server = GPSEServer(('127.0.0.1', port), GPSEHandler)
 
     print(f"")
@@ -2097,7 +2097,7 @@ if __name__ == "__main__":
             print(f"GLOBAL PAYMENT SETTLEMENT ENGINE v{VERSION}")
             print(f"Usage: python engine.py")
             print(f"")
-            print(f"Starts web server on http://localhost:8080")
+            print(f"Starts web server on http://localhost:8686")
             print(f"Modules: Protocol TX | Interbank | IP-to-IP | S2S | GPI | MT103 | RTGS")
             print(f"")
             print(f"Access tokens are required per module.")

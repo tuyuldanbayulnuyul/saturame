@@ -395,7 +395,7 @@ function renderTokens() {
         Object.keys(tokens).forEach(tid => {
             const tdata = tokens[tid];
             html += '<div class="token-item"><div class="token-header"><span class="token-id">' + tid + '</span>';
-            html += '<button class="btn btn-danger" onclick="deleteToken(\'' + mod + '\',\'' + tid + '\')">Delete</button></div>';
+            html += '<button class="btn btn-danger" onclick="deleteToken(\\'' + mod + '\\',\\'' + tid + '\\')">Delete</button></div>';
             html += '<div class="token-fields" id="tf-' + mod + '-' + tid + '">';
             Object.keys(tdata).forEach(field => {
                 const val = tdata[field] === null ? '' : tdata[field];
@@ -404,7 +404,7 @@ function renderTokens() {
             });
             html += '</div></div>';
         });
-        html += '<button class="btn" onclick="addToken(\'' + mod + '\')">+ Add Token</button>';
+        html += '<button class="btn" onclick="addToken(\\'' + mod + '\\')">+ Add Token</button>';
         html += '</div></div>';
     });
     document.getElementById('tab-tokens').innerHTML = html;
@@ -451,10 +451,10 @@ function renderMessages() {
         html += '<div id="msgs-' + mod + '">';
         msgs.forEach((m, i) => {
             html += '<div class="message-item"><input type="text" data-msg-mod="' + mod + '" data-msg-idx="' + i + '" value="' + escHtml(m) + '">';
-            html += '<button class="btn btn-danger" onclick="removeMsg(\'' + mod + '\',' + i + ')">X</button></div>';
+            html += '<button class="btn btn-danger" onclick="removeMsg(\\'' + mod + '\\',' + i + ')">X</button></div>';
         });
         html += '</div>';
-        html += '<button class="btn" onclick="addMsg(\'' + mod + '\')">+ Add Phrase</button>';
+        html += '<button class="btn" onclick="addMsg(\\'' + mod + '\\')">+ Add Phrase</button>';
         html += '</div>';
     });
     document.getElementById('tab-messages').innerHTML = html;
@@ -467,7 +467,7 @@ function renderBin() {
     Object.keys(bins).forEach((prefix, i) => {
         html += '<div class="bin-row"><input type="text" data-bin-key="' + i + '" value="' + escHtml(prefix) + '">';
         html += '<input type="text" data-bin-val="' + i + '" value="' + escHtml(bins[prefix]) + '">';
-        html += '<button class="btn btn-danger" onclick="removeBin(\'' + escHtml(prefix) + '\')">X</button></div>';
+        html += '<button class="btn btn-danger" onclick="removeBin(\\'' + escHtml(prefix) + '\\')">X</button></div>';
     });
     html += '</div><button class="btn" onclick="addBin()">+ Add Entry</button></div>';
     document.getElementById('tab-bin').innerHTML = html;
