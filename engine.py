@@ -944,10 +944,13 @@ def main_menu():
         print(f"  {color}{S.BD} [{num}]{S.RST}  {S.W}{S.BD}{name}{S.RST}")
         print(f"        {S.DM}{desc}{S.RST}\n")
 
+    print(f"  {S.C}{S.BD} [8]{S.RST}  {S.W}{S.BD}Settings Editor{S.RST}")
+    print(f"        {S.DM}Configure tokens, timing, and messages{S.RST}\n")
+
     print(f"  {S.R}{S.BD} [0]{S.RST}  {S.DM}Exit Terminal{S.RST}\n")
     sep()
 
-    choice = input(f"\n  {S.Y}\u25b8 Select Module [0-7] : {S.RST}").strip()
+    choice = input(f"\n  {S.Y}\u25b8 Select Module [0-8] : {S.RST}").strip()
     return choice
 
 
@@ -1826,6 +1829,26 @@ def module_rtgs():
 
 
 # =====================================================================
+# [ SETTINGS EDITOR LAUNCHER ]
+# =====================================================================
+def launch_settings_editor():
+    """Launch the interactive configuration editor."""
+    editor_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(), "config_editor.py")
+    if not os.path.exists(editor_path):
+        print(f"\n  {S.R}[ERROR]{S.RST} config_editor.py not found.")
+        input(f"\n  {S.DM}Press ENTER to return...{S.RST}")
+        return
+    try:
+        import subprocess
+        subprocess.run([sys.executable, editor_path])
+        # Reload config after editor changes
+        load_config()
+    except Exception as e:
+        print(f"\n  {S.R}[ERROR]{S.RST} Failed to launch editor: {e}")
+        input(f"\n  {S.DM}Press ENTER to return...{S.RST}")
+
+
+# =====================================================================
 # [ MAIN EXECUTION ]
 # =====================================================================
 def main():
@@ -1867,6 +1890,8 @@ def main():
             module_mt103()
         elif choice == "7":
             module_rtgs()
+        elif choice == "8":
+            launch_settings_editor()
         else:
             print(f"\n  {S.R}[!] Invalid selection.{S.RST}")
             time.sleep(1)
