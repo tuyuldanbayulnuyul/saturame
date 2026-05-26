@@ -21,16 +21,19 @@ import json
 VERSION = "5.0.0"
 BUILD = "2026.05.26"
 
+# =====================================================================
+# [ CONFIGURATION DIRECTORY ]
+# =====================================================================
+try:
+    CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+except NameError:
+    CONFIG_PATH = os.path.join(os.getcwd(), "config.json")
+
 
 # =====================================================================
-# [ RESULT CONFIGURATION — EDIT HASIL TRANSAKSI DI SINI ]
+# [ DEFAULT CONFIGURATION ]
 # =====================================================================
-# Ubah "SUCCESS" / "FAILED" / "PENDING" untuk setiap modul.
-# Jika "SUCCESS" = transaksi berhasil (hijau).
-# Jika "FAILED"  = transaksi gagal (merah).
-# Jika "PENDING" = transaksi tertunda (kuning).
-
-RESULT_CONFIG = {
+_DEFAULT_RESULT_CONFIG = {
     "protocol_transaction": "SUCCESS",
     "interbank": "FAILED",
     "ip_to_ip": "SUCCESS",
@@ -40,10 +43,9 @@ RESULT_CONFIG = {
     "rtgs": "SUCCESS",
 }
 
-# Custom message per result (optional override)
-RESULT_MESSAGE = {
+_DEFAULT_RESULT_MESSAGE = {
     "protocol_transaction": "",
-    "interbank": "Validator quorum unreachable — TX voided",
+    "interbank": "Validator quorum unreachable \u2014 TX voided",
     "ip_to_ip": "",
     "s2s": "",
     "gpi": "",
@@ -51,11 +53,7 @@ RESULT_MESSAGE = {
     "rtgs": "",
 }
 
-
-# =====================================================================
-# [ TIMING CONFIGURATION ]
-# =====================================================================
-TIMING = {
+_DEFAULT_TIMING = {
     "boot_progress": 8,
     "auth_connect": 1.5,
     "auth_verify": 1.5,
@@ -78,11 +76,7 @@ TIMING = {
     "settlement_duration": 30,
 }
 
-
-# =====================================================================
-# [ ACCESS TOKENS PER MODULE ]
-# =====================================================================
-MODULE_TOKENS = {
+_DEFAULT_MODULE_TOKENS = {
     "protocol_transaction": {
         "83GIM": {
             "name": "DARKOATH",
@@ -184,12 +178,7 @@ MODULE_TOKENS = {
     },
 }
 
-
-# =====================================================================
-# [ BIN DATABASE — VISA / MASTERCARD AUTO-DETECTION ]
-# =====================================================================
-BIN_DATABASE = {
-    # Visa ranges
+_DEFAULT_BIN_DATABASE = {
     "4": "VISA",
     "40": "VISA CLASSIC",
     "41": "VISA CLASSIC",
@@ -201,7 +190,6 @@ BIN_DATABASE = {
     "47": "VISA SIGNATURE",
     "48": "VISA INFINITE",
     "49": "VISA CORPORATE",
-    # Mastercard ranges
     "51": "MASTERCARD STANDARD",
     "52": "MASTERCARD STANDARD",
     "53": "MASTERCARD WORLD",
@@ -213,20 +201,147 @@ BIN_DATABASE = {
     "25": "MASTERCARD (2-SERIES)",
     "26": "MASTERCARD (2-SERIES)",
     "27": "MASTERCARD (2-SERIES)",
-    # American Express
     "34": "AMERICAN EXPRESS",
     "37": "AMERICAN EXPRESS",
-    # Discover
     "60": "DISCOVER",
     "65": "DISCOVER",
-    # JCB
     "35": "JCB",
-    # UnionPay
     "62": "UNIONPAY",
-    # Diners
     "36": "DINERS CLUB",
     "38": "DINERS CLUB",
 }
+
+_DEFAULT_LOADING_MESSAGES = {
+    "protocol_transaction": [
+        "Initializing protocol handshake layer",
+        "Establishing issuer authentication channel",
+        "Validating cryptographic session keys",
+        "Synchronizing with card network gateway",
+        "Performing EMV chip verification sequence",
+        "Generating digital signature envelope",
+    ],
+    "interbank": [
+        "Connecting to SWIFT Alliance network",
+        "Synchronizing interbank ledger nodes",
+        "Verifying correspondent bank routes",
+        "Authenticating with central clearing house",
+        "Validating nostro/vostro account balances",
+        "Establishing multi-hop settlement path",
+    ],
+    "ip_to_ip": [
+        "Initializing peer-to-peer tunnel interface",
+        "Performing mutual TLS certificate exchange",
+        "Establishing encrypted data channel",
+        "Calibrating low-latency routing protocol",
+        "Verifying endpoint identity signatures",
+        "Synchronizing bilateral netting engine",
+    ],
+    "s2s": [
+        "Authenticating REST API credentials",
+        "Establishing OAuth 2.0 bearer session",
+        "Validating merchant webhook endpoints",
+        "Initializing idempotency key registry",
+        "Synchronizing server-side ledger state",
+        "Preparing JSON settlement payload",
+    ],
+    "gpi": [
+        "Connecting to SWIFT GPI Tracker service",
+        "Registering unique end-to-end transaction reference",
+        "Validating GPI member institution credentials",
+        "Synchronizing with gpi.swift.com directory",
+        "Establishing UETR tracking pipeline",
+        "Confirming SLA compliance parameters",
+    ],
+    "mt103": [
+        "Connecting to SWIFT FIN Y-Copy service",
+        "Validating MT103 message syntax (ISO 15022)",
+        "Performing BIC code directory lookup",
+        "Establishing FIN session with receiver",
+        "Generating message authentication code",
+        "Submitting to SWIFT network queue",
+    ],
+    "rtgs": [
+        "Connecting to central bank RTGS node",
+        "Validating participant bank credentials",
+        "Checking real-time liquidity positions",
+        "Reserving funds in settlement account",
+        "Entering payment into gross settlement queue",
+        "Initiating irrevocable fund transfer",
+    ],
+}
+
+_DEFAULT_LOADING_DURATION = {
+    "protocol_transaction": 2.0,
+    "interbank": 2.5,
+    "ip_to_ip": 2.0,
+    "s2s": 2.0,
+    "gpi": 2.5,
+    "mt103": 2.5,
+    "rtgs": 2.5,
+}
+
+
+# =====================================================================
+# [ CONFIG LOAD / SAVE ]
+# =====================================================================
+def load_config():
+    """Load configuration from config.json. Falls back to defaults if missing."""
+    global MODULE_TOKENS, RESULT_CONFIG, RESULT_MESSAGE, TIMING, BIN_DATABASE
+    global LOADING_MESSAGES, LOADING_DURATION
+
+    config = None
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            config = None
+
+    if config:
+        MODULE_TOKENS = config.get("MODULE_TOKENS", _DEFAULT_MODULE_TOKENS)
+        RESULT_CONFIG = config.get("RESULT_CONFIG", _DEFAULT_RESULT_CONFIG)
+        RESULT_MESSAGE = config.get("RESULT_MESSAGE", _DEFAULT_RESULT_MESSAGE)
+        TIMING = config.get("TIMING", _DEFAULT_TIMING)
+        BIN_DATABASE = config.get("BIN_DATABASE", _DEFAULT_BIN_DATABASE)
+        LOADING_MESSAGES = config.get("LOADING_MESSAGES", _DEFAULT_LOADING_MESSAGES)
+        LOADING_DURATION = config.get("LOADING_DURATION", _DEFAULT_LOADING_DURATION)
+    else:
+        MODULE_TOKENS = _DEFAULT_MODULE_TOKENS
+        RESULT_CONFIG = _DEFAULT_RESULT_CONFIG
+        RESULT_MESSAGE = _DEFAULT_RESULT_MESSAGE
+        TIMING = _DEFAULT_TIMING
+        BIN_DATABASE = _DEFAULT_BIN_DATABASE
+        LOADING_MESSAGES = _DEFAULT_LOADING_MESSAGES
+        LOADING_DURATION = _DEFAULT_LOADING_DURATION
+        save_config()
+
+
+def save_config():
+    """Save current configuration to config.json."""
+    config = {
+        "MODULE_TOKENS": MODULE_TOKENS,
+        "RESULT_CONFIG": RESULT_CONFIG,
+        "RESULT_MESSAGE": RESULT_MESSAGE,
+        "TIMING": TIMING,
+        "BIN_DATABASE": BIN_DATABASE,
+        "LOADING_MESSAGES": LOADING_MESSAGES,
+        "LOADING_DURATION": LOADING_DURATION,
+    }
+    try:
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+    except IOError:
+        pass
+
+
+# Load configuration at module level
+load_config()
+
+
+# =====================================================================
+# [ BIN DATABASE — VISA / MASTERCARD AUTO-DETECTION ]
+# =====================================================================
+# BIN_DATABASE is now loaded from config above
 
 def detect_card_brand(card_number):
     """Auto-detect card brand from BIN (first 6 digits)."""
@@ -490,6 +605,95 @@ def get_masked_input(prompt=""):
     return password
 
 
+def input_expiry_mmyy(prompt=""):
+    """Read MM/YY expiry with auto-inserted '/' after 2 digits."""
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    result = ""
+    try:
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            while True:
+                ch = sys.stdin.read(1)
+                if ch in ('\r', '\n'):
+                    sys.stdout.write('\r\n')
+                    break
+                elif ch in ('\x7f', '\x08'):
+                    if result:
+                        if result[-1] == '/':
+                            result = result[:-1]
+                            sys.stdout.write('\b \b')
+                            sys.stdout.flush()
+                        result = result[:-1]
+                        sys.stdout.write('\b \b')
+                        sys.stdout.flush()
+                elif ch == '\x03':
+                    sys.stdout.write('\r\n')
+                    raise KeyboardInterrupt
+                elif ch.isdigit():
+                    raw_digits = result.replace('/', '')
+                    if len(raw_digits) >= 4:
+                        continue
+                    result += ch
+                    sys.stdout.write(ch)
+                    sys.stdout.flush()
+                    raw_digits = result.replace('/', '')
+                    if len(raw_digits) == 2 and '/' not in result:
+                        result += '/'
+                        sys.stdout.write('/')
+                        sys.stdout.flush()
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except (ImportError, OSError):
+        result = input("")
+    return result
+
+
+def module_spinner(module_key, count=3):
+    """Run module-specific loading spinners from config."""
+    messages = LOADING_MESSAGES.get(module_key, ["Processing..."])
+    duration = LOADING_DURATION.get(module_key, 2.0)
+    per_msg_duration = duration / min(count, len(messages))
+    selected = messages[:count] if len(messages) >= count else messages
+    for msg in selected:
+        spinner(msg, per_msg_duration)
+
+
+def display_customer_info_box(user_data):
+    """Display formatted box with customer data fields."""
+    cardholder = user_data.get("cardholder", "N/A")
+    bank_provider = user_data.get("bank_provider", "N/A")
+    iso_country = user_data.get("iso_country", "N/A")
+    iso_a2 = user_data.get("iso_a2", "N/A")
+    iso_a3 = user_data.get("iso_a3", "N/A")
+    iso_num = user_data.get("iso_num", "N/A")
+
+    box_width = 54
+    print(f"\n  {S.C}{S.BD}\u250c{'─' * box_width}\u2510{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST} {S.W}{S.BD}{'CUSTOMER DATA':^{box_width - 2}}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u251c{'─' * box_width}\u2524{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST}  {S.DM}Cardholder  :{S.RST} {S.W}{S.BD}{cardholder:<36}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST}  {S.DM}Bank        :{S.RST} {S.W}{bank_provider:<36}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST}  {S.DM}Country     :{S.RST} {S.W}{iso_country:<36}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST}  {S.DM}ISO Alpha-2 :{S.RST} {S.W}{iso_a2:<36}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST}  {S.DM}ISO Alpha-3 :{S.RST} {S.W}{iso_a3:<36}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u2502{S.RST}  {S.DM}ISO Numeric :{S.RST} {S.W}{iso_num:<36}{S.RST} {S.C}{S.BD}\u2502{S.RST}")
+    print(f"  {S.C}{S.BD}\u2514{'─' * box_width}\u2518{S.RST}")
+
+
+def system_status_bar(module_name):
+    """Display a system status bar at the top of each module."""
+    session = gen_session_id()[:12]
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"  {S.DM}\u250c{'─' * 66}\u2510{S.RST}")
+    print(f"  {S.DM}\u2502 {S.C}MODULE{S.DM}: {S.W}{module_name:<20}{S.DM} {S.C}SESSION{S.DM}: {S.W}{session}  {S.C}TIME{S.DM}: {S.W}{now}{S.DM} \u2502{S.RST}")
+    print(f"  {S.DM}\u2514{'─' * 66}\u2518{S.RST}")
+    print()
+
+
 def show_result(module_key, tx_details):
     """Display transaction result based on RESULT_CONFIG."""
     result = RESULT_CONFIG.get(module_key, "SUCCESS").upper()
@@ -723,6 +927,7 @@ def main_menu():
     print(LOGOS["main"])
     print(f"  {S.DM}{'─'*68}{S.RST}")
     print(f"  {S.W}{S.BD}  SELECT TRANSACTION MODULE{S.RST}")
+    print(f"  {S.DM}  Build {BUILD} | {len(MODULE_TOKENS)} Active Modules | Status: OPERATIONAL{S.RST}")
     print(f"  {S.DM}{'─'*68}{S.RST}\n")
 
     modules = [
@@ -736,13 +941,13 @@ def main_menu():
     ]
 
     for num, name, desc, color in modules:
-        print(f"  {color}{S.BD}[{num}]{S.RST} {S.W}{S.BD}{name}{S.RST}")
-        print(f"      {S.DM}{desc}{S.RST}\n")
+        print(f"  {color}{S.BD} [{num}]{S.RST}  {S.W}{S.BD}{name}{S.RST}")
+        print(f"        {S.DM}{desc}{S.RST}\n")
 
-    print(f"  {S.R}{S.BD}[0]{S.RST} {S.DM}Exit Terminal{S.RST}\n")
+    print(f"  {S.R}{S.BD} [0]{S.RST}  {S.DM}Exit Terminal{S.RST}\n")
     sep()
 
-    choice = input(f"\n  {S.Y}▸ Select Module [0-7] : {S.RST}").strip()
+    choice = input(f"\n  {S.Y}\u25b8 Select Module [0-7] : {S.RST}").strip()
     return choice
 
 
@@ -753,6 +958,7 @@ def module_protocol_transaction():
     """Protocol Transaction — converted from GUI to CLI with BIN detection."""
     clear()
     print(LOGOS["protocol"])
+    system_status_bar("PROTOCOL TRANSACTION")
     print(f"  {S.DM}{'─'*60}{S.RST}")
     print(f"  {S.ORANGE}{S.BD}  PROTOCOL TRANSACTION ENGINE{S.RST}")
     print(f"  {S.DM}  Card-based settlement with Visa/Mastercard auto-detection{S.RST}")
@@ -770,7 +976,7 @@ def module_protocol_transaction():
 
     user_data = tokens[token_input]
     print(f"\n  {S.G}[✓]{S.RST} Authenticated as: {S.W}{S.BD}{user_data['name']}{S.RST}")
-    spinner("Establishing secure protocol session", 2.0)
+    module_spinner("protocol_transaction", count=2)
     print()
 
     # Protocol Selection
@@ -818,10 +1024,13 @@ def module_protocol_transaction():
     print(f"      Type    : {S.W}{brand}{S.RST}")
     print(f"      Card    : {S.DM}**** **** **** {S.W}{last4}{S.RST}")
 
+    # Display customer data from token
+    display_customer_info_box(user_data)
+
     spinner("Validating card BIN with issuer", 1.5)
 
-    # Expiry
-    expiry = input(f"\n  {S.Y}▸ Expiry Date (MM/YY) : {S.RST}").strip()
+    # Expiry with MM/YY auto-format
+    expiry = input_expiry_mmyy(f"\n  {S.Y}\u25b8 Expiry Date (MM/YY) : {S.RST}")
     spinner("Checking card status", 1.0)
 
 
@@ -888,10 +1097,7 @@ def module_protocol_transaction():
 
     # Processing
     print()
-    spinner("Authenticating authorization code", 2.0)
-    spinner("Establishing secure settlement protocol", 2.5)
-    spinner("Verifying ledger integrity", 1.5)
-    spinner("Generating digital signature", 2.0)
+    module_spinner("protocol_transaction", count=4)
     print()
 
     # Settlement
@@ -914,6 +1120,7 @@ def module_interbank():
     """Interbank Transfer — Full SWIFT network simulation."""
     clear()
     print(LOGOS["interbank"])
+    system_status_bar("INTERBANK TRANSFER")
     print(f"  {S.DM}{'─'*68}{S.RST}")
     print(f"  {S.W}{S.BD}        ▸▸▸  INTERBANK TRANSFER TRANSACTION  ◂◂◂{S.RST}")
     print(f"  {S.DM}  Protocol: BANK-SERVER | Encryption: AES-256-GCM | TLS 1.3{S.RST}")
@@ -943,9 +1150,7 @@ def module_interbank():
         pw_hash = hashlib.sha256(pass_input.encode()).hexdigest()
         if user_input == admin_token["username"] and pw_hash == admin_token["password_hash"]:
             print()
-            spinner("Authenticating with remote server", TIMING["auth_verify"])
-            spinner("Validating 2FA biometric token", TIMING["auth_2fa"])
-            spinner("Generating ephemeral session key", TIMING["auth_session_key"])
+            module_spinner("interbank", count=3)
             print(f"\n  {S.G}{S.BD}[✓] IDENTITY CONFIRMED — ACCESS GRANTED{S.RST}\n")
             time.sleep(1)
             break
@@ -1105,6 +1310,7 @@ def module_ip_to_ip():
     """Direct IP-to-IP peer transfer protocol."""
     clear()
     print(LOGOS["ip2ip"])
+    system_status_bar("IP-TO-IP TRANSFER")
     print(f"  {S.DM}{'─'*60}{S.RST}")
     print(f"  {S.TEAL}{S.BD}  DIRECT IP TRANSFER PROTOCOL{S.RST}")
     print(f"  {S.DM}  Peer-to-peer encrypted tunnel fund settlement{S.RST}")
@@ -1123,7 +1329,7 @@ def module_ip_to_ip():
     user_data = tokens[token_input]
     print(f"\n  {S.G}[✓]{S.RST} Operator: {S.W}{S.BD}{user_data['operator']}{S.RST}")
     print(f"      Clearance: {S.TEAL}{user_data['clearance']}{S.RST} | Region: {S.W}{user_data['region']}{S.RST}")
-    spinner("Initializing IP tunnel engine", 2.0)
+    module_spinner("ip_to_ip", count=2)
     print()
 
     # Source/Dest IP Configuration
@@ -1170,8 +1376,7 @@ def module_ip_to_ip():
     spinner("Encrypting payload (AES-256-CTR)", 2.0)
     spinner("Transmitting through secure tunnel", 3.0)
     progress("Data Transfer", duration=4.0, width=35, color=S.TEAL)
-    spinner("Verifying receipt acknowledgment", 1.5)
-    spinner("Finalizing settlement on both nodes", 2.0)
+    module_spinner("ip_to_ip", count=2)
     print()
 
     # Settlement
@@ -1198,6 +1403,7 @@ def module_s2s():
     """Server-to-Server REST API settlement."""
     clear()
     print(LOGOS["s2s"])
+    system_status_bar("SERVER-TO-SERVER")
     print(f"  {S.DM}{'─'*60}{S.RST}")
     print(f"  {S.PURPLE}{S.BD}  SERVER-TO-SERVER SETTLEMENT API{S.RST}")
     print(f"  {S.DM}  RESTful payment processing between merchant servers{S.RST}")
@@ -1217,7 +1423,7 @@ def module_s2s():
     print(f"\n  {S.G}[✓]{S.RST} Engine: {S.W}{S.BD}{user_data['name']}{S.RST}")
     print(f"      Merchant: {S.W}{user_data['merchant']}{S.RST}")
     print(f"      API: {S.PURPLE}{user_data['api_version']}{S.RST} | Env: {S.G}{user_data['environment']}{S.RST}")
-    spinner("Authenticating API credentials", 2.0)
+    module_spinner("s2s", count=2)
     print()
 
     # API Endpoint Config
@@ -1266,8 +1472,7 @@ def module_s2s():
 
     spinner("Serializing JSON payload", 1.0)
     spinner("Sending POST request to settlement server", 2.5)
-    spinner("Awaiting server response (HTTP 200)", 3.0)
-    spinner("Processing webhook callback", 1.5)
+    module_spinner("s2s", count=2)
     print()
 
     # Show simulated response
@@ -1299,6 +1504,7 @@ def module_gpi():
     """SWIFT GPI — Global Payment Innovation tracker."""
     clear()
     print(LOGOS["gpi"])
+    system_status_bar("SWIFT GPI")
     print(f"  {S.DM}{'─'*60}{S.RST}")
     print(f"  {S.GOLD}{S.BD}  SWIFT GPI — GLOBAL PAYMENT INNOVATION{S.RST}")
     print(f"  {S.DM}  End-to-end payment tracking with UETR reference{S.RST}")
@@ -1317,7 +1523,7 @@ def module_gpi():
     user_data = tokens[token_input]
     print(f"\n  {S.G}[✓]{S.RST} Institution: {S.W}{S.BD}{user_data['institution']}{S.RST}")
     print(f"      BIC: {S.GOLD}{user_data['bic']}{S.RST} | Member: {S.W}{user_data['gpi_member_id']}{S.RST}")
-    spinner("Connecting to SWIFT GPI Tracker", 2.5)
+    module_spinner("gpi", count=2)
     print()
 
     # GPI Transaction Setup
@@ -1340,9 +1546,7 @@ def module_gpi():
     remit_info = input(f"  {S.Y}▸ Remittance Info               : {S.RST}").strip() or "PAYMENT"
 
     print()
-    spinner("Validating BIC codes against SWIFT directory", 2.0)
-    spinner("Submitting to GPI Tracker (gpi.swift.com)", 3.0)
-    spinner("Registering UETR in global tracker database", 2.0)
+    module_spinner("gpi", count=3)
     print()
 
 
@@ -1395,6 +1599,7 @@ def module_mt103():
     """SWIFT MT103 — Single Customer Credit Transfer message."""
     clear()
     print(LOGOS["mt103"])
+    system_status_bar("SWIFT MT103")
     print(f"  {S.DM}{'─'*60}{S.RST}")
     print(f"  {S.B}{S.BD}  SWIFT MT103 — SINGLE CUSTOMER CREDIT TRANSFER{S.RST}")
     print(f"  {S.DM}  FIN message format for cross-border wire transfers{S.RST}")
@@ -1414,7 +1619,7 @@ def module_mt103():
     print(f"\n  {S.G}[✓]{S.RST} Gateway: {S.W}{S.BD}{user_data['name']}{S.RST}")
     print(f"      Institution: {S.W}{user_data['institution']}{S.RST}")
     print(f"      BIC: {S.B}{user_data['bic']}{S.RST} | Branch: {S.W}{user_data['branch']}{S.RST}")
-    spinner("Connecting to SWIFT FIN Network", 2.5)
+    module_spinner("mt103", count=2)
     print()
 
     # MT103 Message Fields
@@ -1479,9 +1684,7 @@ def module_mt103():
     print()
 
     # Processing
-    spinner("Validating MT103 message syntax (ISO 15022)", 2.0)
-    spinner("Submitting to SWIFT FIN Y-Copy", 3.0)
-    spinner("Awaiting ACK from receiver BIC", 2.5)
+    module_spinner("mt103", count=3)
     
     # Network trace
     print()
@@ -1521,6 +1724,7 @@ def module_rtgs():
     """Real-Time Gross Settlement System."""
     clear()
     print(LOGOS["rtgs"])
+    system_status_bar("RTGS SETTLEMENT")
     print(f"  {S.DM}{'─'*60}{S.RST}")
     print(f"  {S.G}{S.BD}  RTGS — REAL-TIME GROSS SETTLEMENT{S.RST}")
     print(f"  {S.DM}  Central bank operated high-value payment system{S.RST}")
@@ -1540,7 +1744,7 @@ def module_rtgs():
     print(f"\n  {S.G}[✓]{S.RST} System: {S.W}{S.BD}{user_data['name']}{S.RST}")
     print(f"      Operator: {S.W}{user_data['system']}{S.RST}")
     print(f"      Routing: {S.G}{user_data['routing']}{S.RST} | Node: {S.W}{user_data['node']}{S.RST}")
-    spinner("Connecting to Central Bank RTGS Node", 2.5)
+    module_spinner("rtgs", count=2)
     print()
 
     # RTGS System Selection
@@ -1587,9 +1791,7 @@ def module_rtgs():
 
     print()
     # RTGS Processing
-    spinner("Validating participant banks in RTGS directory", 2.0)
-    spinner("Checking liquidity position of sending bank", 2.5)
-    spinner("Reserving funds in sender nostro account", 2.0)
+    module_spinner("rtgs", count=3)
     
     # Queue simulation
     print()
@@ -1599,9 +1801,7 @@ def module_rtgs():
     print()
 
     spinner("Processing gross settlement (irrevocable)", 3.0)
-    spinner("Debiting sender central bank account", 2.0)
-    spinner("Crediting receiver central bank account", 2.0)
-    spinner("Generating settlement confirmation", 1.5)
+    module_spinner("rtgs", count=3)
     print()
 
     # Real-time confirmation
