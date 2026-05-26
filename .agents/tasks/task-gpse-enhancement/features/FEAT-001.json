@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Extract all hardcoded configuration into config.json, create config loading/saving infrastructure, add custom loading messages per module, implement MM/YY auto-format, and enhance BIN detection display to show full customer data.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Create a config.json file at /projects/sandbox/saturame/config.json containing all externalized settings: MODULE_TOKENS (all 7 systems with full data), RESULT_CONFIG, RESULT_MESSAGE, TIMING, BIN_DATABASE, LOADING_MESSAGES (professional per-system loading phrases with configurable duration), and LOADING_DURATION (per-module loading time in seconds). The MODULE_TOKENS for protocol_transaction must include all fields: name, cardholder, bank_provider, iso_country, iso_a2, iso_a3, iso_num, allowed_card_last4. LOADING_MESSAGES should have module-specific professional phrases like: protocol_transaction: ['Initializing protocol handshake layer', 'Establishing issuer authentication channel', 'Validating cryptographic session keys'], interbank: ['Connecting to SWIFT Alliance network', 'Synchronizing interbank ledger nodes', 'Verifying correspondent bank routes'], etc.",
     "Step 2: Modify engine.py to load configuration from config.json at startup. Add a load_config() function near the top that reads config.json if it exists, otherwise uses built-in defaults and creates config.json. Add a save_config() function. Replace all references to hardcoded MODULE_TOKENS, RESULT_CONFIG, RESULT_MESSAGE, TIMING with the loaded config dict. Keep BIN_DATABASE as is in the code (it is reference data, not user config) but also make it overridable from config.",
@@ -26,5 +26,5 @@
     "python3 -c \"import sys; sys.path.insert(0,'/projects/sandbox/saturame'); exec(open('/projects/sandbox/saturame/engine.py').read().split('if __name__')[0]); print('Module loads OK')\""
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "CONFIG_PATH uses try/except for __file__ to handle exec() contexts where __file__ is not defined. The interbank password_hash in config.json stores the pre-computed sha256 hex string directly. The module_spinner function pulls messages from LOADING_MESSAGES config and distributes LOADING_DURATION evenly across the requested count of messages."
 }
